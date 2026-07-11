@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>花をいける</title>
+<style>
+:root{
+  --sumi:#1a1614; --washi:#efe9dd; --washi-2:#e3dbca;
+  --seiji:#7d9b8a; --seiji-dark:#4f6b5c; --tan:#b05d43;
+  --line:rgba(26,22,20,.14); --shadow:rgba(26,22,20,.18);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  font-family:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  color:var(--sumi); background:var(--sumi);
+  overflow:hidden; position:fixed; width:100%;
+  -webkit-user-select:none; user-select:none;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.screen{position:absolute;inset:0;display:none;flex-direction:column}
+.screen.active{display:flex}
+
+/* ── 作品情報画面 ── */
+#intro{background:
+  radial-gradient(120% 80% at 50% -10%, #2a2320 0%, var(--sumi) 60%);
+  color:var(--washi);align-items:center;justify-content:center;padding:32px;text-align:center}
+.intro-inner{max-width:420px;width:100%}
+.brand{font-size:13px;letter-spacing:.5em;color:var(--seiji);margin:0 0 28px;padding-left:.5em}
+.work-vessel{font-size:13px;letter-spacing:.3em;color:var(--washi-2);opacity:.7;margin:0 0 10px}
+.work-title{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(32px,9vw,46px);font-weight:600;margin:0 0 6px;line-height:1.2}
+.work-note{font-size:14px;color:var(--washi-2);opacity:.8;margin:18px 0 0;line-height:1.7}
+.start-btn{margin-top:40px;width:100%;padding:18px;border-radius:2px;
+  background:var(--seiji);color:#fff;font-size:16px;font-weight:600;letter-spacing:.1em;
+  transition:background .2s}
+.start-btn:active{background:var(--seiji-dark)}
+.privacy{margin-top:22px;font-size:12px;color:var(--washi-2);opacity:.55;line-height:1.7}
+.err-work{color:#e0a0a0}
+
+/* ── カメラ画面 ── */
+#stage{background:#000}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+#layer{position:absolute;inset:0;overflow:hidden;touch-action:none}
+.bloom{position:absolute;left:0;top:0;transform-origin:center bottom;will-change:transform;
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.45))}
+.bloom img{display:block;width:220px;height:auto;pointer-events:none}
+.bloom.selected{outline:1.5px dashed rgba(255,255,255,.7);outline-offset:6px}
+
+/* 上部バー */
+.topbar{position:absolute;top:0;left:0;right:0;padding:14px 16px;
+  display:flex;align-items:center;gap:12px;
+  background:linear-gradient(180deg,rgba(0,0,0,.55),transparent);z-index:5}
+.topbar .t-title{color:#fff;font-family:"Yu Mincho",serif;font-size:17px;flex:1}
+.icon-btn{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.14);
+  color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+
+/* 下部パネル */
+.panel{position:absolute;left:0;right:0;bottom:0;z-index:5;
+  background:linear-gradient(0deg,rgba(0,0,0,.62) 60%,transparent);
+  padding:16px 0 max(16px,env(safe-area-inset-bottom))}
+.tabs{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:7px 16px;border-radius:100px;font-size:14px;
+  background:rgba(255,255,255,.14);color:#fff;letter-spacing:.08em}
+.tab.on{background:var(--washi);color:var(--sumi);font-weight:600}
+.tab-row{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none}
+.tab-row::-webkit-scrollbar{display:none}
+.tab-row .tab{font-size:13px;padding:6px 14px}
+.thumbs{display:flex;gap:12px;padding:4px 16px 2px;overflow-x:auto;scrollbar-width:none}
+.thumbs::-webkit-scrollbar{display:none}
+.thumb{flex:0 0 auto;width:76px;text-align:center}
+.thumb .pic{width:76px;height:76px;border-radius:10px;background:rgba(255,255,255,.1);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;border:1.5px solid transparent}
+.thumb .pic img{width:100%;height:100%;object-fit:contain}
+.thumb.on .pic{border-color:var(--seiji);background:rgba(125,155,138,.25)}
+.thumb .nm{margin-top:6px;font-size:12px;color:#fff}
+.empty-thumbs{color:rgba(255,255,255,.6);font-size:13px;padding:22px 16px;text-align:center;width:100%}
+
+/* シャッター */
+.shutter-wrap{display:flex;justify-content:center;padding:14px 0 4px}
+.shutter{width:68px;height:68px;border-radius:50%;background:#fff;
+  border:4px solid rgba(255,255,255,.5);box-shadow:0 0 0 2px rgba(0,0,0,.3)}
+.shutter:active{transform:scale(.94)}
+
+/* 操作ヒント */
+.hint{position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:4;
+  background:rgba(0,0,0,.5);color:#fff;font-size:12px;padding:7px 14px;border-radius:100px;
+  opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap}
+.hint.show{opacity:1}
+
+/* モーダル（ネイティブダイアログ不使用） */
+.modal-bg{position:absolute;inset:0;background:rgba(10,8,7,.6);z-index:20;
+  display:none;align-items:center;justify-content:center;padding:28px}
+.modal-bg.active{display:flex}
+.modal{background:var(--washi);border-radius:6px;max-width:340px;width:100%;
+  padding:24px;box-shadow:0 20px 60px var(--shadow)}
+.modal h3{margin:0 0 10px;font-size:17px;font-family:"Yu Mincho",serif}
+.modal p{margin:0 0 20px;font-size:14px;line-height:1.7;color:#4a4440}
+.modal-row{display:flex;gap:10px}
+.modal-row button{flex:1;padding:13px;border-radius:2px;font-size:15px;font-weight:600}
+.m-cancel{background:var(--washi-2);color:var(--sumi)}
+.m-ok{background:var(--seiji);color:#fff}
+.toast{position:absolute;bottom:120px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--sumi);color:var(--washi);font-size:14px;padding:12px 22px;border-radius:100px;
+  z-index:25;opacity:0;transition:all .3s}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── メーカーモード（学芸員用） ── */
+#maker{background:var(--washi)}
+.mk-top{padding:16px;background:var(--sumi);color:var(--washi)}
+.mk-top .t1{font-family:"Yu Mincho",serif;font-size:17px}
+.mk-top .t2{font-size:12px;opacity:.65;margin-top:3px}
+.mk-stage{flex:1;position:relative;background:
+  repeating-conic-gradient(var(--washi-2) 0 25%, var(--washi) 0 50%) 0 0/24px 24px;
+  overflow:hidden;min-height:0}
+#makerPhoto{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none}
+#makerLayer{position:absolute;inset:0;touch-action:none}
+.mk-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:#8a8378;font-size:14px;text-align:center;line-height:1.8;padding:20px}
+.mk-panel{background:#fff;border-top:1px solid var(--line);
+  padding:14px 16px max(16px,env(safe-area-inset-bottom))}
+.mk-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:14px}
+.mk-row select,.mk-row input[type=file]{flex:1;font-size:14px;padding:8px;
+  border:1px solid var(--line);border-radius:4px;background:#fff;font-family:inherit}
+.mk-thumbs{display:flex;gap:10px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+.mk-thumbs::-webkit-scrollbar{display:none}
+.mk-thumbs .thumb .nm{color:var(--sumi)}
+.mk-thumbs .thumb .pic{background:var(--washi-2)}
+.mk-make{width:100%;padding:15px;border-radius:2px;background:var(--seiji);color:#fff;
+  font-size:15px;font-weight:600;letter-spacing:.08em}
+.mk-make:disabled{opacity:.4}
+/* QR結果 */
+.qr-sheet{position:absolute;inset:0;background:rgba(10,8,7,.55);z-index:30;
+  display:none;align-items:center;justify-content:center;padding:24px}
+.qr-sheet.active{display:flex}
+.qr-card{background:#fff;border-radius:8px;padding:22px;max-width:360px;width:100%;
+  text-align:center;box-shadow:0 24px 70px var(--shadow);max-height:90%;overflow:auto}
+.qr-card canvas{width:100%;max-width:280px;height:auto;image-rendering:pixelated}
+.qr-card .q-title{font-family:"Yu Mincho",serif;font-size:18px;margin:12px 0 2px}
+.qr-card .q-sub{font-size:13px;color:#6a6258;margin-bottom:4px}
+.qr-card .q-url{font-size:10px;color:#9a9288;word-break:break-all;margin:8px 0 14px}
+.qr-card .modal-row button{padding:12px}
+</style>
+</head>
+<body>
+
+<!-- 作品情報画面 -->
+<section id="intro" class="screen active">
+  <div class="intro-inner">
+    <p class="brand">花をいける</p>
+    <div id="workBox">
+      <p class="work-vessel" id="wVessel">—</p>
+      <h1 class="work-title" id="wTitle">作品を読み込み中</h1>
+      <p class="work-note" id="wNote"></p>
+      <p class="work-note" id="wPreset" style="color:var(--seiji)"></p>
+    </div>
+    <button class="start-btn" id="startBtn">カメラをはじめる</button>
+    <p class="privacy">撮影した画像は端末内でのみ処理され、<br>外部に送信されることはありません。</p>
+  </div>
+</section>
+
+<!-- カメラ画面 -->
+<section id="stage" class="screen">
+  <video id="video" playsinline muted autoplay></video>
+  <div id="layer"></div>
+
+  <div class="topbar">
+    <div class="t-title" id="stageTitle"></div>
+    <button class="icon-btn" id="clearBtn" title="花を消す">🗑</button>
+  </div>
+
+  <div class="hint" id="hint">ドラッグで移動・二本指で拡大縮小と回転</div>
+
+  <div class="panel">
+    <div class="tabs" id="seasonTabs"></div>
+    <div class="tab-row" id="styleTabs"></div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="shutter-wrap"><button class="shutter" id="shutter" title="保存"></button></div>
+  </div>
+</section>
+
+<!-- メーカーモード（学芸員用・?mode=maker で起動） -->
+<section id="maker" class="screen">
+  <div class="mk-top">
+    <div class="t1">QRコード作成</div>
+    <div class="t2">学芸員用 — 作品写真の上で花を選び、来館者向けQRを作ります。写真は端末外に送信されません。</div>
+  </div>
+  <div class="mk-stage">
+    <img id="makerPhoto" alt="">
+    <div id="makerLayer"></div>
+    <div class="mk-empty" id="mkEmpty">下の「作品写真」から、あらかじめ撮影した<br>花器の写真を選んでください</div>
+  </div>
+  <div class="mk-panel">
+    <div class="mk-row"><span>作品写真</span><input type="file" id="photoInput" accept="image/*"></div>
+    <div class="mk-row"><span>作品</span><select id="workSelect"></select></div>
+    <div class="mk-thumbs thumbs" id="makerThumbs"></div>
+    <button class="mk-make" id="makeQRBtn">この花でQRコードを作成</button>
+  </div>
+</section>
+
+<!-- QR結果シート -->
+<div class="qr-sheet" id="qrSheet">
+  <div class="qr-card">
+    <canvas id="qrCanvas" width="280" height="280"></canvas>
+    <div class="q-title" id="qTitle"></div>
+    <div class="q-sub" id="qSub"></div>
+    <div class="q-url" id="qUrl"></div>
+    <div class="modal-row">
+      <button class="m-cancel" id="qClose">閉じる</button>
+      <button class="m-ok" id="qSave">QR画像を保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="mTitle"></h3>
+    <p id="mBody"></p>
+    <div class="modal-row">
+      <button class="m-cancel" id="mCancel">キャンセル</button>
+      <button class="m-ok" id="mOk">OK</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* 依存ゼロQRエンコーダ（バイトモード, ECCレベルM, バージョン1-10自動, マスク0固定）
+   URL程度の文字列専用。生成物はOpenCVデコーダで検証済みであること。 */
+const QR = (function () {
+  "use strict";
+  /* GF(256) */
+  const EXP = new Array(512), LOG = new Array(256);
+  (function () {
+    let x = 1;
+    for (let i = 0; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11d; }
+    for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  })();
+  const gmul = (a, b) => (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]];
+  function rsGen(n) {
+    let g = [1];
+    for (let i = 0; i < n; i++) {
+      const ng = new Array(g.length + 1).fill(0);
+      for (let j = 0; j < g.length; j++) { ng[j] ^= g[j]; ng[j + 1] ^= gmul(g[j], EXP[i]); }
+      g = ng;
+    }
+    return g;
+  }
+  function rsEcc(data, n) {
+    const gen = rsGen(n);
+    const msg = data.concat(new Array(n).fill(0));
+    for (let i = 0; i < data.length; i++) {
+      const c = msg[i];
+      if (c !== 0) for (let j = 0; j < gen.length; j++) msg[i + j] ^= gmul(gen[j], c);
+    }
+    return msg.slice(data.length);
+  }
+  /* version(M): [total, ecPerBlock, blocks1, dataCW1, blocks2, dataCW2] */
+  const VER_M = {
+    1: [26, 10, 1, 16, 0, 0], 2: [44, 16, 1, 28, 0, 0], 3: [70, 26, 1, 44, 0, 0],
+    4: [100, 18, 2, 32, 0, 0], 5: [134, 24, 2, 43, 0, 0], 6: [172, 16, 4, 27, 0, 0],
+    7: [196, 18, 4, 31, 0, 0], 8: [242, 22, 2, 38, 2, 39], 9: [292, 22, 3, 36, 2, 37],
+    10: [346, 26, 4, 43, 1, 44]
+  };
+  const ALIGN = {
+    1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34],
+    7: [6, 22, 38], 8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50]
+  };
+  const dataCW = v => { const t = VER_M[v]; return t[2] * t[3] + t[4] * t[5]; };
+  function chooseVersion(nBytes) {
+    for (let v = 1; v <= 10; v++) {
+      const cc = v < 10 ? 8 : 16;
+      if (Math.ceil((4 + cc + nBytes * 8) / 8) <= dataCW(v)) return v;
+    }
+    throw new Error("data too long (v1-10, ECC M)");
+  }
+  function encodeData(bytes, v) {
+    const bits = [];
+    const put = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1); };
+    put(0b0100, 4);
+    put(bytes.length, v < 10 ? 8 : 16);
+    for (const b of bytes) put(b, 8);
+    const capBits = dataCW(v) * 8;
+    for (let i = 0; i < 4 && bits.length < capBits; i++) bits.push(0); // terminator
+    while (bits.length % 8 !== 0) bits.push(0);
+    const cw = [];
+    for (let i = 0; i < bits.length; i += 8) {
+      let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
+      cw.push(b);
+    }
+    const pad = [0xEC, 0x11]; let k = 0;
+    while (cw.length < dataCW(v)) cw.push(pad[k++ % 2]);
+    return cw;
+  }
+  function interleave(cw, v) {
+    const [, ec, b1, d1, b2, d2] = VER_M[v];
+    const blocks = []; let idx = 0;
+    for (let i = 0; i < b1; i++) { const d = cw.slice(idx, idx + d1); idx += d1; blocks.push([d, rsEcc(d, ec)]); }
+    for (let i = 0; i < b2; i++) { const d = cw.slice(idx, idx + d2); idx += d2; blocks.push([d, rsEcc(d, ec)]); }
+    const out = [];
+    const maxd = Math.max(...blocks.map(b => b[0].length));
+    for (let i = 0; i < maxd; i++) for (const [d] of blocks) if (i < d.length) out.push(d[i]);
+    for (let i = 0; i < ec; i++) for (const [, e] of blocks) out.push(e[i]);
+    return out;
+  }
+  function bchDigit(d) { let n = 0; while (d !== 0) { n++; d >>>= 1; } return n; }
+  function bchTypeInfo(data) {
+    let d = data << 10;
+    while (bchDigit(d) - bchDigit(0x537) >= 0) d ^= 0x537 << (bchDigit(d) - bchDigit(0x537));
+    return ((data << 10) | d) ^ 0x5412;
+  }
+  function buildMatrix(v, codewords) {
+    const sz = v * 4 + 17;
+    const M = []; for (let i = 0; i < sz; i++) M.push(new Array(sz).fill(null));
+    const setFinder = (r, c) => {
+      for (let dr = -1; dr <= 7; dr++) for (let dc = -1; dc <= 7; dc++) {
+        const rr = r + dr, cc = c + dc;
+        if (rr < 0 || rr >= sz || cc < 0 || cc >= sz) continue;
+        const on = (dr >= 0 && dr <= 6 && (dc === 0 || dc === 6)) ||
+                   (dc >= 0 && dc <= 6 && (dr === 0 || dr === 6)) ||
+                   (dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4);
+        M[rr][cc] = on ? 1 : 0;
+      }
+    };
+    setFinder(0, 0); setFinder(0, sz - 7); setFinder(sz - 7, 0);
+    for (const r of ALIGN[v]) for (const c of ALIGN[v]) {         // 位置合わせ（ファインダ重複はスキップ）
+      if (M[r][c] !== null) continue;
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++)
+        M[r + dr][c + dc] = Math.max(Math.abs(dr), Math.abs(dc)) !== 1 ? 1 : 0;
+    }
+    for (let i = 8; i < sz - 8; i++) {                             // タイミング
+      if (M[6][i] === null) M[6][i] = i % 2 === 0 ? 1 : 0;
+      if (M[i][6] === null) M[i][6] = i % 2 === 0 ? 1 : 0;
+    }
+    for (let i = 0; i < 9; i++) {                                  // フォーマット領域予約
+      if (M[8][i] === null) M[8][i] = 0;
+      if (M[i][8] === null) M[i][8] = 0;
+    }
+    for (let i = 0; i < 8; i++) if (M[8][sz - 1 - i] === null) M[8][sz - 1 - i] = 0;
+    for (let i = 0; i < 7; i++) if (M[sz - 1 - i][8] === null) M[sz - 1 - i][8] = 0;
+    M[sz - 8][8] = 1;                                              // 暗モジュール
+    if (v >= 7) {                                                  // バージョン情報（v7以上は必須）
+      let d = v << 12;
+      while (bchDigit(d) - bchDigit(0x1F25) >= 0) d ^= 0x1F25 << (bchDigit(d) - bchDigit(0x1F25));
+      const vb = (v << 12) | d;
+      for (let i = 0; i < 18; i++) {
+        const mod = (vb >> i) & 1;
+        M[Math.floor(i / 3)][i % 3 + sz - 11] = mod;               // 右上ブロック
+        M[i % 3 + sz - 11][Math.floor(i / 3)] = mod;               // 左下ブロック
+      }
+    }
+    /* データ配置（ジグザグ）＋マスク0 */
+    const bits = [];
+    for (const b of codewords) for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
+    let bi = 0, inc = -1, row = sz - 1;
+    for (let col = sz - 1; col > 0; col -= 2) {
+      if (col === 6) col--;
+      while (true) {
+        for (let c = 0; c < 2; c++) {
+          const cc = col - c;
+          if (M[row][cc] === null) {
+            let dark = bi < bits.length ? bits[bi] : 0; bi++;
+            if ((row + cc) % 2 === 0) dark ^= 1;                   // マスク0
+            M[row][cc] = dark;
+          }
+        }
+        row += inc;
+        if (row < 0 || row >= sz) { row -= inc; inc = -inc; break; }
+      }
+    }
+    /* フォーマット情報（レベルM=00, マスク0） */
+    const fb = bchTypeInfo((0b00 << 3) | 0);
+    for (let i = 0; i < 15; i++) {
+      const mod = (fb >> i) & 1;
+      if (i < 6) M[i][8] = mod;
+      else if (i < 8) M[i + 1][8] = mod;
+      else M[sz - 15 + i][8] = mod;
+    }
+    for (let i = 0; i < 15; i++) {
+      const mod = (fb >> i) & 1;
+      if (i < 8) M[8][sz - 1 - i] = mod;
+      else if (i < 9) M[8][15 - i] = mod;
+      else M[8][14 - i] = mod;
+    }
+    M[sz - 8][8] = 1;
+    return M;
+  }
+  function encode(text) {
+    const bytes = Array.from(new TextEncoder().encode(text));
+    const v = chooseVersion(bytes.length);
+    return buildMatrix(v, interleave(encodeData(bytes, v), v));
+  }
+  return { encode };
+})();
+
+
+const WORKS = [{"id": "W001", "title": "青花梅瓶", "vessel": "梅瓶", "mouthWidth": "narrow", "styles": ["so", "bunjin"], "note": "細口。一枝ものが適合"}, {"id": "W002", "title": "青磁鳳凰耳瓶", "vessel": "鳳凰耳瓶", "mouthWidth": "medium", "styles": ["shin", "gyo", "bunjin"], "note": "格の高い器。端正な構成"}, {"id": "W003", "title": "白磁水盤", "vessel": "水盤", "mouthWidth": "wide", "styles": ["shin", "bunjin"], "note": "広口。蓮・水物に適合"}];
+const FLOWERS = [{"id": "F012", "name": "梅", "reading": "うめ", "season": "winter", "styles": ["so", "bunjin"], "vesselFit": ["narrow", "medium"], "source": "3", "credit": "ダミー素材", "anchor": {"x": 0.5, "y": 0.96}, "img": "data:image/webp;base64,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IAW3W5noCMuum7q6p/U6WB0CysSa5b7RTBUae2iAW3W5noCMuum7rcyoHLXf+DwDl9ctdDmt5qkF1fUHNNys1S263M9ARl103dbmeb1P6nWoE8yiboNoBpecfwhp1gZbbIkKAjLrpu63M9ARl101sVpNAn2PL9/MomIxI4KHuZwQJdcJb+R7FlopAFt1uZ6AjLrpungZTnm/qIXHWISwHmlGK263M9ARl103dbmefybgih6V9GU85YUZ2Vq1bdbmegIy66butzPQDczzSXrpe5K1t/IpAFt1uZ6AjLrpu63M9ARQT+aSViy0UgC263M9ARl103dbmecBD+KQBbdbmegIy66butzPQEZDz2Ly8z0BGXXTd1uZ6AjLrpu5WZSBTYQAtutzPQEZddN3W5nn8yysLd1uZ6AjLrpu63M9ARl10i9RD2tzPQEZddN3W5noCMuum6ik9iy0UgC263M9ARl103dbmecFKa3sIAW3W5noCMuum7rcz0A4HL8UgC263M9ARl103dbmegIyHnsXl5noCMuum7rcz0BGXXTdysykCmwgBbdbmegIy66butzPP5llYW7rcz0BGXXTd1uZ6AjLrpF6iHtbmegIy66butzPQEZddN1FJ7FlopAFt1uZ6AjLrpu63M84KU1vYQAtutzPQEZddN3W5noBwOX4pAFt1uZ6AjLrpu63M9ARkPPYvLzPQEZddN3W5noCMuum7lZlIFNhAC263M9ARl103dbmefzLKwt3W5noCMuum7rcz0BGXXSL1EPa3M9ARl103dbmegIy66bqKT2LLRSALbrcz0BGXXTd1uZ5wUprewgBbdbmegIy66butzPQDgcvxSALbrcz0BGXXTd1uZ6AjIhRnOXzPQEZddN3W5noCMuum7rcz0BGXXTd1uZ6AjLrpu63M9ARl103dbmegGwAAP7H8gAAAAAAAAAAAAAAA/fZd372O/t+UkgGw7fm5IpYI2prpQphgFbqpq+9jv3ko53KU05fgllb5WBSsZBBOWFMWETs6/0V3Jykwbjp5+dpcwUkKrTcRgCXMsW07BO/EBjwHNQwuifyp7GVyWdJKpXmtulUd0d2o/hgb+lKGF7dSbmA30UcydKmfRxEI+FH6UjUic5YAhnigzfWq1CcGYdSdiA4blgY/8fXnD7R+QnOoAyuWhoyBBc9clOmDMa6qQgCN0oy5N4nbhIXDlFI2OAOWmrbs4X3sd/wXzRo4OeunPn6S/5dK7AnnTc6ck+9jv6FNGjwYBLexwtNB2++Ai8NVFfxTdyImcs6fTpG749Yqzxgwwu4QIUS2zyN6IksW06+yyd/n4GdmI0BDMxFrGxLsHL/JTs5+2iOdciGWlfBaTDyJpZcatg2G+ijjMnihgQBes7IqNFeBpuBZP1p2T+dL0e/cfbUYW8iVSN7WQxoZOszwf4/8NHYXK8N6B/86PcfyJMDfFWKykiDsErtcmKp2dNaiR5FeN/9uOBSfsCjzZPP/tciGlDKtFoD9syplzP4a/tg+dsZmVl36ISXvzlbs2Pw/Rs+vRizxKW7/PwuFsi3z1V2kT6EmTN9cRwAJjInDXZxmRl9pv5PLfoTJxaSSlPvCIieIOerSgoX9IKUIVVSFBaaq6lNW3ZwvvY7/gvmjSwwEPTo77yRRNWobZ3vVe1xSYazW3vvngmzs+Ub/BpFRwvgUjPP0goookjNGoXP0GdEyWnzP3VvULq0LWvpXgptUcHSGwDwG0vbjBuhtxJcN+uNndi2ErPEtNG0bTXaFDUkzU5nhRe/AOSMENoEO9kH7IpK0oM1ibKMaxZsy87lxnpsiKeDmXXqGM8l9sh9mlPYUv/J7HKayGLsfOp9tThQ0ShrFcjRCS10X4XTljXymEAGmg7lmXvw1MAU2opmLIlOoYmveankxjGSGrUaBmaLiODqpDSnBLUF8avnHWsnrbvYsuO5lq1Fjv3QBPOWPWl+Hj63lv3W9Dx2woniX4H4Vuti8uOBH0ACDtmCwkm0tRSQs3IxFmORv/TWx4yc4IzXHrB1DJtxbH1oFsa+d5mH70OmGxLC+85rQZkSS5H59BP3LpwM/6JMTAGrGW2QPX+n/SXAfC3yrXG5+TIUAFgqsUZzVBNCvC/PcpkBFcmRS/oDRZDOf4WlEZTIV1DysJCAVa9zAEcLO9sBT09YtHcttAGlY+u7oPvl/2RZhn4ATM6PnP04IS87BU/WhPN+f4ACUYDYHHXUzh35stejZc39l/VCulEw+yGYZMFmaI16XN2ss//bjgUejC7iv90W8Xp4vV1Z1nzVEwO/7HX9t+41D1i+Jyq/gS6j226mfVxlHdqexWJS3dgAKth8W+MJkk9QyvAHDGfBUrMSxld3Q0TBbI6J/W5QUA0ajIF3irzm5ChtcWkFKAjU2AfICHhNtNQfty7/j2ZXiYKBOvopSmFGki8z7EmkwrVsT/zG6vhAGeongweajSSj//FPfDKeYgGh+j2z/fTyuRSmqOTUZKXVkKu7Jt4YBxfW+k4GXY01w//iiuhuNu//bspMrxF7gWlAgDvmW+C9uW+s4ZBJflRFiaAAu8GW9RTH4/M1M5o4yPsx3QBV/+KMJkzlZ74J1mwWxQJUKnX49RfTTAy/YYEFwRa7NFBQD1m8WwoCZmtYF5N7YKANOZHlsEdNawFHN7YKANOZHlsEdNawFHN7YKANOZHlsEdNawFHN7YKANOZHlsEdNawFHN7YKANOZHlsEdNawFHN7YKANOZHlsEdNawGBnDDOEcxwBAAAAAAAAA"}, {"id": "F031", "name": "菊", "reading": "きく", "season": "autumn", "styles": ["shin", "gyo"], "vesselFit": ["narrow", "medium"], "source": "1", "credit": "ダミー素材", "anchor": {"x": 0.5, "y": 0.96}, "img": "data:image/webp;base64,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"}, {"id": "F021", "name": "蓮", "reading": "はす", "season": "summer", "styles": ["shin", "bunjin"], "vesselFit": ["medium", "wide"], "source": "1", "credit": "ダミー素材", "anchor": {"x": 0.5, "y": 0.96}, "img": "data:image/webp;base64,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"}, {"id": "F045", "name": "水仙", "reading": "すいせん", "season": "winter", "styles": ["so", "bunjin"], "vesselFit": ["narrow"], "source": "1", "credit": "ダミー素材", "anchor": {"x": 0.5, "y": 0.96}, "img": "data:image/webp;base64,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"}, {"id": "F050", "name": "松竹梅", "reading": "しょうちくばい", "season": "winter", "styles": ["shin"], "vesselFit": ["medium"], "source": "1", "credit": "ダミー素材", "anchor": {"x": 0.5, "y": 0.96}, "img": "data:image/webp;base64,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"}];
+const STYLE_LABELS = {"shin": "真", "gyo": "行", "so": "草", "bunjin": "文人花", "bonsai": "盆栽", "morimono": "盛物"};
+const SEASON_LABELS = {"spring": "春", "summer": "夏", "autumn": "秋", "winter": "冬"};
+const SEASON_ORDER = ["spring","summer","autumn","winter"];
+
+const $ = s => document.querySelector(s);
+const el = (t,c)=>{const e=document.createElement(t); if(c) e.className=c; return e;};
+
+/* ── 状態 ── */
+let currentWork = null;
+let sel = { season:null, style:null };
+let placed = [];          // {node, x, y, scale, rot}
+let activeBloom = null;
+
+/* ── モーダル（Promise化） ── */
+function confirmModal(title, body, okLabel="OK"){
+  return new Promise(res=>{
+    $("#mTitle").textContent = title;
+    $("#mBody").textContent = body;
+    $("#mOk").textContent = okLabel;
+    $("#modalBg").classList.add("active");
+    const done = v => { $("#modalBg").classList.remove("active");
+      $("#mOk").onclick=null; $("#mCancel").onclick=null; res(v); };
+    $("#mOk").onclick = ()=>done(true);
+    $("#mCancel").onclick = ()=>done(false);
+  });
+}
+function toast(msg){
+  const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1800);
+}
+
+/* ── 作品特定 ── */
+function LOC(){ return location; }
+function loadWork(){
+  const params = new URLSearchParams(LOC().search);
+  const id = params.get("work");
+  currentWork = WORKS.find(w=>w.id===id) || null;
+  if(!currentWork){
+    $("#wVessel").textContent="";
+    $("#wTitle").innerHTML='<span class="err-work">作品が見つかりません</span>';
+    $("#wNote").textContent="QRコードをもう一度読み取ってください。";
+    $("#startBtn").disabled=true; $("#startBtn").style.opacity=.4;
+    return;
+  }
+  $("#wVessel").textContent = currentWork.vessel;
+  $("#wTitle").textContent = currentWork.title;
+  $("#wNote").textContent = currentWork.note||"";
+  $("#stageTitle").textContent = currentWork.title;
+  const fid=params.get("f");
+  const pf=fid && FLOWERS.find(x=>x.id===fid);
+  $("#wPreset").textContent = pf ? `この作品には「${pf.name}」がえらばれています` : "";
+}
+
+/* ── この作品に出せる花（器適合 × 様式適合） ── */
+function eligibleFlowers(){
+  if(!currentWork) return [];
+  return FLOWERS.filter(f=>
+    f.vesselFit.includes(currentWork.mouthWidth) &&
+    f.styles.some(s=>currentWork.styles.includes(s))
+  );
+}
+
+/* ── タブ構築 ── */
+function buildTabs(){
+  const pool = eligibleFlowers();
+  const seasons = SEASON_ORDER.filter(s=>pool.some(f=>f.season===s));
+  const seasonBox = $("#seasonTabs"); seasonBox.innerHTML="";
+  seasons.forEach(s=>{
+    const b=el("button","tab"); b.textContent=SEASON_LABELS[s];
+    b.onclick=()=>{ sel.season=s; sel.style=null; renderStyleTabs(); renderThumbs(); markTabs(); };
+    b.dataset.season=s; seasonBox.appendChild(b);
+  });
+  if(seasons.length){ sel.season=seasons[0]; }
+  renderStyleTabs(); renderThumbs(); markTabs();
+}
+function renderStyleTabs(){
+  const pool = eligibleFlowers().filter(f=>f.season===sel.season);
+  // 器が許す様式のみ、かつプールに存在するもの
+  const styles = Object.keys(STYLE_LABELS).filter(st=>
+    currentWork.styles.includes(st) && pool.some(f=>f.styles.includes(st))
+  );
+  const box=$("#styleTabs"); box.innerHTML="";
+  const allBtn=el("button","tab"); allBtn.textContent="すべて";
+  allBtn.onclick=()=>{ sel.style=null; renderThumbs(); markTabs(); };
+  allBtn.dataset.style="__all__"; box.appendChild(allBtn);
+  styles.forEach(st=>{
+    const b=el("button","tab"); b.textContent=STYLE_LABELS[st];
+    b.onclick=()=>{ sel.style=st; renderThumbs(); markTabs(); };
+    b.dataset.style=st; box.appendChild(b);
+  });
+}
+function markTabs(){
+  document.querySelectorAll("#seasonTabs .tab").forEach(b=>
+    b.classList.toggle("on", b.dataset.season===sel.season));
+  document.querySelectorAll("#styleTabs .tab").forEach(b=>
+    b.classList.toggle("on", (b.dataset.style==="__all__"&&!sel.style)||b.dataset.style===sel.style));
+}
+function renderThumbs(){
+  let pool = eligibleFlowers().filter(f=>f.season===sel.season);
+  if(sel.style) pool = pool.filter(f=>f.styles.includes(sel.style));
+  const box=$("#thumbs"); box.innerHTML="";
+  if(!pool.length){ const e=el("div","empty-thumbs");
+    e.textContent="この様式に合う花はまだありません"; box.appendChild(e); return; }
+  pool.forEach(f=>{
+    const t=el("div","thumb");
+    t.innerHTML=`<div class="pic"><img src="${f.img}" alt=""></div><div class="nm">${f.name}</div>`;
+    t.onclick=()=>placeFlower(f);
+    box.appendChild(t);
+  });
+}
+
+/* ── 花を配置 ── */
+function createBloom(f, layer){
+  const node=el("div","bloom");
+  node.innerHTML=`<img src="${f.img}" alt="${f.name}">`;
+  layer.appendChild(node);
+  const lw=layer.clientWidth, lh=layer.clientHeight;
+  const state={node, x:lw/2, y:lh*0.62, scale:1, rot:0,
+               anchor:f.anchor||{x:.5,y:.96}, flower:f};
+  node._state=state;
+  attachGestures(state);
+  applyTransform(state);
+  return state;
+}
+function placeFlower(f){
+  const state=createBloom(f, $("#layer"));
+  placed.push(state);
+  selectBloom(state);
+  showHint();
+  return state;
+}
+
+/* ── QRプリセット（?f=花ID&s=倍率）を反映 ── */
+function applyPreset(){
+  const p=new URLSearchParams(LOC().search);
+  const fid=p.get("f");
+  if(!fid) return null;
+  const f=FLOWERS.find(x=>x.id===fid);
+  if(!f){ toast("指定された花が見つかりません"); return null; }
+  if(!eligibleFlowers().some(x=>x.id===fid)){
+    toast("この作品には合わない花の指定です"); return null; }
+  sel.season=f.season; sel.style=null;
+  renderStyleTabs(); renderThumbs(); markTabs();
+  const st=placeFlower(f);
+  const s=parseFloat(p.get("s"));
+  if(s>=0.3 && s<=4){ st.scale=s; applyTransform(st); }
+  toast(`「${f.name}」を生けてみましょう`);
+  return st;
+}
+function applyTransform(s){
+  const img=s.node.querySelector("img");
+  const iw=img.naturalWidth||220, ih=img.naturalHeight||330;
+  const dispW=220, dispH=dispW*(ih/iw);
+  // アンカー点が (s.x,s.y) に来るよう左上を逆算
+  const ax=s.anchor.x*dispW, ay=s.anchor.y*dispH;
+  s.node.style.transform=
+    `translate(${s.x-ax}px,${s.y-ay}px) rotate(${s.rot}deg) scale(${s.scale})`;
+  s.node.style.transformOrigin=`${ax}px ${ay}px`;
+}
+function selectBloom(s){
+  placed.forEach(p=>p.node.classList.remove("selected"));
+  if(s){ s.node.classList.add("selected");
+    s.node.parentNode.appendChild(s.node); } // 前面へ
+  activeBloom=s;
+}
+
+/* ── ジェスチャ（Pointer Events自前実装・依存ゼロ） ── */
+function attachGestures(s){
+  const node=s.node;
+  const pts=new Map();
+  let start=null;
+  node.addEventListener("pointerdown",e=>{
+    node.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    selectBloom(s);
+    if(pts.size===1){
+      start={mode:"move",px:e.clientX,py:e.clientY,x:s.x,y:s.y};
+    }else if(pts.size===2){
+      const [a,b]=[...pts.values()];
+      start={mode:"pinch",
+        dist:Math.hypot(a.x-b.x,a.y-b.y),
+        ang:Math.atan2(b.y-a.y,b.x-a.x),
+        scale:s.scale,rot:s.rot};
+    }
+  });
+  node.addEventListener("pointermove",e=>{
+    if(!pts.has(e.pointerId))return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(start && start.mode==="move" && pts.size===1){
+      s.x=start.x+(e.clientX-start.px);
+      s.y=start.y+(e.clientY-start.py);
+      applyTransform(s);
+    }else if(pts.size===2 && start){
+      const [a,b]=[...pts.values()];
+      const dist=Math.hypot(a.x-b.x,a.y-b.y);
+      const ang=Math.atan2(b.y-a.y,b.x-a.x);
+      if(start.mode!=="pinch"){
+        start={mode:"pinch",dist,ang,scale:s.scale,rot:s.rot};
+      }else{
+        s.scale=Math.max(.3,Math.min(4,start.scale*(dist/start.dist)));
+        s.rot=start.rot+(ang-start.ang)*180/Math.PI;
+        applyTransform(s);
+      }
+    }
+  });
+  const up=e=>{ pts.delete(e.pointerId);
+    if(pts.size===1){ const [id]=[...pts.keys()]; const p=pts.get(id);
+      start={mode:"move",px:p.x,py:p.y,x:s.x,y:s.y}; }
+    if(pts.size===0) start=null; };
+  node.addEventListener("pointerup",up);
+  node.addEventListener("pointercancel",up);
+}
+
+let hintShown=false;
+function showHint(){ if(hintShown)return; hintShown=true;
+  const h=$("#hint"); h.classList.add("show");
+  setTimeout(()=>h.classList.remove("show"),3200); }
+
+/* ── カメラ起動 ── */
+async function startCamera(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:"environment"}},audio:false});
+    $("#video").srcObject=stream;
+  }catch(err){
+    await confirmModal("カメラを起動できません",
+      "カメラへのアクセスが許可されているかご確認ください。","閉じる");
+  }
+}
+
+/* ── 合成保存 ── */
+async function capture(){
+  const video=$("#video"), layer=$("#layer");
+  if(!video.videoWidth){ toast("カメラの準備中です"); return; }
+  const W=layer.clientWidth, H=layer.clientHeight;
+  const dpr=Math.min(window.devicePixelRatio||1,2.5);
+  const cv=document.createElement("canvas");
+  cv.width=W*dpr; cv.height=H*dpr;
+  const ctx=cv.getContext("2d"); ctx.scale(dpr,dpr);
+  // カメラ映像を object-fit:cover と同等に描画
+  const vr=video.videoWidth/video.videoHeight, br=W/H;
+  let sw,sh,sx,sy;
+  if(vr>br){ sh=video.videoHeight; sw=sh*br; sx=(video.videoWidth-sw)/2; sy=0; }
+  else{ sw=video.videoWidth; sh=sw/br; sx=0; sy=(video.videoHeight-sh)/2; }
+  ctx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
+  // 花を重ねる（選択枠は消す）
+  const wasSel=activeBloom; selectBloom(null);
+  for(const s of placed){
+    const img=s.node.querySelector("img");
+    const iw=img.naturalWidth||220, ih=img.naturalHeight||330;
+    const dispW=220, dispH=dispW*(ih/iw);
+    const ax=s.anchor.x*dispW, ay=s.anchor.y*dispH;
+    ctx.save();
+    ctx.translate(s.x,s.y);
+    ctx.rotate(s.rot*Math.PI/180);
+    ctx.scale(s.scale,s.scale);
+    ctx.drawImage(img,-ax,-ay,dispW,dispH);
+    ctx.restore();
+  }
+  if(wasSel) selectBloom(wasSel);
+  cv.toBlob(blob=>{
+    if(!blob){ toast("保存に失敗しました"); return; }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    const wid=currentWork?currentWork.id:"work";
+    a.href=url; a.download=`hana_${wid}_${Date.now()}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast("画像を保存しました");
+  },"image/png");
+}
+
+/* ── メーカーモード（学芸員用QR作成） ── */
+let makerWork=null, makerBloom=null;
+function renderMakerThumbs(){
+  const box=$("#makerThumbs"); box.innerHTML="";
+  const pool=FLOWERS.filter(f=>
+    f.vesselFit.includes(makerWork.mouthWidth) &&
+    f.styles.some(s=>makerWork.styles.includes(s)));
+  if(!pool.length){ const e=el("div","empty-thumbs");
+    e.textContent="この器に適合する花が登録されていません"; box.appendChild(e); return; }
+  pool.forEach(f=>{
+    const t=el("div","thumb");
+    t.innerHTML=`<div class="pic"><img src="${f.img}" alt=""></div><div class="nm">${f.name}</div>`;
+    t.onclick=()=>{
+      box.querySelectorAll(".thumb").forEach(x=>x.classList.remove("on"));
+      t.classList.add("on");
+      if(makerBloom) makerBloom.node.remove();
+      makerBloom=createBloom(f, $("#makerLayer"));
+      selectBloom(null);
+    };
+    box.appendChild(t);
+  });
+}
+function initMaker(){
+  $("#intro").classList.remove("active");
+  $("#maker").classList.add("active");
+  const selEl=$("#workSelect");
+  WORKS.forEach(w=>{
+    const o=document.createElement("option");
+    o.value=w.id; o.textContent=`${w.id}　${w.title}（${w.vessel}）`;
+    selEl.appendChild(o);
+  });
+  makerWork=WORKS[0];
+  selEl.onchange=()=>{
+    makerWork=WORKS.find(w=>w.id===selEl.value);
+    if(makerBloom){ makerBloom.node.remove(); makerBloom=null; }
+    renderMakerThumbs();
+  };
+  renderMakerThumbs();
+  $("#photoInput").onchange=e=>{
+    const file=e.target.files && e.target.files[0];
+    if(!file) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      $("#makerPhoto").src=r.result;
+      $("#makerPhoto").style.display="block";
+      $("#mkEmpty").style.display="none";
+    };
+    r.readAsDataURL(file);
+  };
+  $("#makeQRBtn").onclick=makeQRCard;
+  $("#qClose").onclick=()=>$("#qrSheet").classList.remove("active");
+  $("#qSave").onclick=saveQRCard;
+}
+function buildPresetURL(){
+  const s=Math.round(makerBloom.scale*100)/100;
+  const base=LOC().origin + LOC().pathname;
+  return `${base}?work=${makerWork.id}&f=${makerBloom.flower.id}&s=${s}`;
+}
+function drawQRMatrix(ctx, m, px, offX, offY){
+  ctx.fillStyle="#fff"; // 呼び出し側で背景済み想定でも念のため
+  ctx.fillStyle="#000";
+  for(let r=0;r<m.length;r++)for(let c=0;c<m.length;c++)
+    if(m[r][c]) ctx.fillRect(offX+c*px, offY+r*px, px, px);
+}
+function makeQRCard(){
+  if(!makerBloom){ toast("花を選んでください"); return; }
+  const url=buildPresetURL();
+  let m;
+  try{ m=QR.encode(url); }
+  catch(err){ toast("URLが長すぎてQR化できません"); return; }
+  const cv=$("#qrCanvas");
+  const qz=4, size=m.length+qz*2;
+  const px=Math.max(2,Math.floor(280/size));
+  cv.width=cv.height=size*px;
+  const ctx=cv.getContext("2d");
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  drawQRMatrix(ctx,m,px,qz*px,qz*px);
+  $("#qTitle").textContent=makerWork.title;
+  $("#qSub").textContent=`${makerWork.vessel} × ${makerBloom.flower.name}（倍率 ${Math.round(makerBloom.scale*100)/100}）`;
+  $("#qUrl").textContent=url;
+  $("#qrSheet").classList.add("active");
+}
+function saveQRCard(){
+  const url=buildPresetURL();
+  let m; try{ m=QR.encode(url); }catch(e){ toast("QR生成に失敗しました"); return; }
+  const qz=4, size=m.length+qz*2, px=16;
+  const W=size*px+120, H=size*px+240;
+  const cv=document.createElement("canvas");
+  cv.width=W; cv.height=H;
+  const ctx=cv.getContext("2d");
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H);
+  const offX=(W-size*px)/2;
+  drawQRMatrix(ctx,m,px,offX+qz*px,40+qz*px);
+  ctx.fillStyle="#000"; ctx.textAlign="center";
+  ctx.font="600 34px 'Yu Mincho','Hiragino Mincho ProN',serif";
+  ctx.fillText(makerWork.title, W/2, size*px+110);
+  ctx.font="22px sans-serif"; ctx.fillStyle="#555";
+  ctx.fillText(`${makerWork.vessel} × ${makerBloom.flower.name}`, W/2, size*px+150);
+  ctx.font="18px sans-serif"; ctx.fillStyle="#999";
+  ctx.fillText(`${makerWork.id} / ${makerBloom.flower.id}`, W/2, size*px+185);
+  cv.toBlob(blob=>{
+    if(!blob){ toast("保存に失敗しました"); return; }
+    const u=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=u; a.download=`QR_${makerWork.id}_${makerBloom.flower.id}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),1000);
+    toast("QR画像を保存しました");
+  },"image/png");
+}
+
+/* ── イベント ── */
+$("#startBtn").onclick=async()=>{
+  if(!currentWork)return;
+  $("#intro").classList.remove("active");
+  $("#stage").classList.add("active");
+  buildTabs();
+  applyPreset();
+  await startCamera();
+};
+$("#clearBtn").onclick=async()=>{
+  if(!placed.length){ toast("花はまだありません"); return; }
+  const ok=await confirmModal("花を消す","配置した花をすべて消しますか？","消す");
+  if(ok){ placed.forEach(p=>p.node.remove()); placed=[]; activeBloom=null; toast("花を消しました"); }
+};
+$("#shutter").onclick=capture;
+$("#layer").addEventListener("pointerdown",e=>{
+  if(e.target.id==="layer") selectBloom(null);
+});
+
+if(new URLSearchParams(LOC().search).get("mode")==="maker"){
+  initMaker();
+}else{
+  loadWork();
+}
+</script>
+</body>
+</html>
