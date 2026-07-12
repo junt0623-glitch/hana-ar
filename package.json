@@ -1,0 +1,11 @@
+{
+  "name": "hana-ar",
+  "private": true,
+  "description": "美術館向けAR花いけアプリ（花をいける）の回帰テスト用。アプリ本体(hana-ar.html)は依存ゼロ・単一ファイル。テストのみPlaywrightを使用。",
+  "scripts": {
+    "test": "node tests/hana-ar.spec.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

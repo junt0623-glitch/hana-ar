@@ -1,0 +1,35 @@
+name: hana-ar Playwright回帰テスト
+
+# 手動起動のみ（workflow_dispatch）。キャプション工房・スライドブラッシュアップ工房と同じ運用方式。
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: Node.jsをセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Playwright本体をインストール
+        run: npm install playwright@latest
+
+      - name: Chromiumをインストール(疑似カメラ利用のためChromiumのみで十分)
+        run: npx playwright install --with-deps chromium
+
+      - name: 回帰テストを実行
+        run: node tests/hana-ar.spec.js
+
+      - name: 失敗時のスクリーンショットを保存(任意)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failure-artifacts
+          path: |
+            **/*.png
+          if-no-files-found: ignore
