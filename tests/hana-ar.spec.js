@@ -27,6 +27,8 @@ function startServer() {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const urlPath = req.url.split("?")[0];
+      // フル版Chromiumはfaviconを自動取得し404がconsole.errorに乗るため空応答を返す（headless shellでは要求されない）
+      if (urlPath === "/favicon.ico") { res.writeHead(204); res.end(); return; }
       const file = urlPath === "/" ? HTML_FILE : urlPath.replace(/^\//, "");
       const full = path.join(ROOT, file);
       fs.readFile(full, (err, data) => {
@@ -66,6 +68,8 @@ async function run() {
   httpServer = await startServer();
 
   browser = await chromium.launch({
+    // ローカル/コンテナ環境でPlaywright同梱版と異なるChromiumを使う場合のみ指定（CIでは未設定のまま）
+    executablePath: process.env.HANA_AR_CHROMIUM || undefined,
     args: [
       "--use-fake-ui-for-media-stream",
       "--use-fake-device-for-media-stream",
@@ -105,12 +109,12 @@ async function run() {
     assert(w > 0, "video要素にカメラ映像が来ていない");
   });
 
-  await bt("bt04", "器適合: W001は梅・水仙のみサムネイル表示", async (page) => {
+  await bt("bt04", "器適合: W001は梅・水仙・蝋梅のみサムネイル表示", async (page) => {
     await page.goto(`${BASE}?work=W001`);
     await page.click("#startBtn");
     await page.waitForSelector("#thumbs .thumb", { timeout: 5000 });
     const names = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()).sort());
-    assert.deepStrictEqual(names, ["水仙", "梅"].sort(), "got: " + JSON.stringify(names));
+    assert.deepStrictEqual(names, ["水仙", "梅", "蝋梅"].sort(), "got: " + JSON.stringify(names));
   });
 
   await bt("bt05", "器適合: 真の様式(松竹梅)はW001に出ない", async (page) => {
@@ -231,14 +235,14 @@ async function run() {
     }
   });
 
-  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花2件)", async (page) => {
+  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花3件)", async (page) => {
     await page.goto(`${BASE}?mode=maker`);
     await page.waitForSelector("#maker.active");
     const opts = await page.$$eval("#workSelect option", els => els.length);
     assert.strictEqual(opts, 3);
     await page.waitForSelector("#makerThumbs .thumb");
     const thumbs = await page.$$eval("#makerThumbs .thumb", els => els.length);
-    assert.strictEqual(thumbs, 2, "W001の適合花は2件のはず, got " + thumbs);
+    assert.strictEqual(thumbs, 3, "W001の適合花は3件のはず, got " + thumbs);
   });
 
   await bt("bt15", "メーカーモードでQRコードが生成される", async (page) => {
@@ -265,11 +269,11 @@ async function run() {
     await page.click("#makeQRBtn");
     await page.waitForSelector("#qrSheet.active");
     const url = await page.textContent("#qUrl");
-    assert(/\?work=W001&f=F0(12|45)&s=1/.test(url), "URL形式不正: " + url);
+    assert(/\?work=W001&f=F0(21|22|23)&s=1/.test(url), "URL形式不正: " + url);
   });
 
   await bt("bt17", "プリセットURL(?work=&f=&s=)で花が自動配置される", async (page) => {
-    await page.goto(`${BASE}?work=W001&f=F012&s=1.3`);
+    await page.goto(`${BASE}?work=W001&f=F023&s=1.3`);
     await page.click("#startBtn");
     await page.waitForSelector("#layer .bloom", { timeout: 5000 });
     const scale = await page.evaluate(() => document.querySelector("#layer .bloom")._state.scale);
@@ -277,7 +281,7 @@ async function run() {
   });
 
   await bt("bt18", "不適合プリセットは拒否されトースト表示", async (page) => {
-    await page.goto(`${BASE}?work=W001&f=F031&s=1.0`);
+    await page.goto(`${BASE}?work=W001&f=F015&s=1.0`);
     await page.click("#startBtn");
     await page.waitForTimeout(600);
     const count = await page.$$eval("#layer .bloom", els => els.length);
