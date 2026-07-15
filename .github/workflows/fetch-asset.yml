@@ -1,0 +1,41 @@
+# 一時的な素材中継ワークフロー（AI生成画像のダウンロード用・作業完了後に削除する）
+# 実行環境のネットワークポリシーでCanva等へ直接アクセスできないため、
+# Actionsランナーを中継してファイルを取得し、ブランチにコミットする。
+name: fetch-asset (temporary relay)
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'Space-separated URLs to fetch'
+        required: true
+      names:
+        description: 'Space-separated output filenames (same count/order as urls)'
+        required: true
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch files
+        env:
+          URLS: ${{ inputs.urls }}
+          NAMES: ${{ inputs.names }}
+        run: |
+          mkdir -p _incoming
+          set -- $NAMES
+          for u in $URLS; do
+            n="$1"; shift
+            echo "fetching $u -> _incoming/$n"
+            curl -sSL --max-time 120 -o "_incoming/$n" "$u"
+          done
+          ls -la _incoming
+          file _incoming/* || true
+      - name: Commit to branch
+        run: |
+          git config user.name "asset-relay[bot]"
+          git config user.email "actions@github.com"
+          git add _incoming
+          git commit -m "chore: relay fetched assets (temporary, will be removed)"
+          git push
