@@ -1,0 +1,31 @@
+# 一時的なモデル中継ワークフロー（ONNXモデルのダウンロード用・作業完了後に削除する）
+# _fetch_model.txt（1行目=URL）をpushすると発火し、90MB分割で _model/ にコミットする。
+name: fetch-model (temporary relay)
+on:
+  push:
+    branches: ['claude/ar-flower-onboarding-rd7ahn']
+    paths: ['_fetch_model.txt']
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and split model
+        run: |
+          url=$(head -1 _fetch_model.txt)
+          mkdir -p _model
+          curl -sSL --max-time 600 -o _model/model.onnx "$url"
+          ls -la _model
+          sha256sum _model/model.onnx > _model/model.sha256
+          split -b 90M _model/model.onnx _model/model.onnx.part.
+          rm _model/model.onnx
+          ls -la _model
+      - name: Commit to branch
+        run: |
+          git config user.name "asset-relay[bot]"
+          git config user.email "actions@github.com"
+          git add -f _model
+          git commit -m "chore: relay onnx model chunks (temporary, will be removed)"
+          git push
