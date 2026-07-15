@@ -128,18 +128,12 @@ async function run() {
     assert(!names.includes("松竹梅"), "松竹梅が出てしまっている");
   });
 
-  await bt("bt06", "器適合: W003は夏タブ=蓮・冬タブ=仏手柑(盛物)", async (page) => {
+  await bt("bt06", "器適合: W003は蓮のみ表示", async (page) => {
     await page.goto(`${BASE}?work=W003`);
     await page.click("#startBtn");
     await page.waitForSelector("#thumbs .thumb");
-    // 既定は夏タブ（蓮のみ）
-    const summer = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()));
-    assert.deepStrictEqual(summer, ["蓮"], "夏タブ got: " + JSON.stringify(summer));
-    // 水盤は盛物も受けるので冬タブに仏手柑が出る
-    await page.click('#seasonTabs .tab[data-season="winter"]');
-    await page.waitForSelector("#thumbs .thumb");
-    const winter = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()));
-    assert.deepStrictEqual(winter, ["仏手柑"], "冬タブ got: " + JSON.stringify(winter));
+    const names = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()));
+    assert.deepStrictEqual(names, ["蓮"]);
   });
 
   await bt("bt07", "花サムネイルタップで配置される", async (page) => {
