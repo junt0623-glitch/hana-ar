@@ -27,6 +27,8 @@ function startServer() {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const urlPath = req.url.split("?")[0];
+      // フル版Chromiumはfaviconを自動取得し404がconsole.errorに乗るため空応答を返す（headless shellでは要求されない）
+      if (urlPath === "/favicon.ico") { res.writeHead(204); res.end(); return; }
       const file = urlPath === "/" ? HTML_FILE : urlPath.replace(/^\//, "");
       const full = path.join(ROOT, file);
       fs.readFile(full, (err, data) => {
@@ -66,6 +68,8 @@ async function run() {
   httpServer = await startServer();
 
   browser = await chromium.launch({
+    // ローカル/コンテナ環境でPlaywright同梱版と異なるChromiumを使う場合のみ指定（CIでは未設定のまま）
+    executablePath: process.env.HANA_AR_CHROMIUM || undefined,
     args: [
       "--use-fake-ui-for-media-stream",
       "--use-fake-device-for-media-stream",
@@ -265,11 +269,11 @@ async function run() {
     await page.click("#makeQRBtn");
     await page.waitForSelector("#qrSheet.active");
     const url = await page.textContent("#qUrl");
-    assert(/\?work=W001&f=F0(12|45)&s=1/.test(url), "URL形式不正: " + url);
+    assert(/\?work=W001&f=F0(22|23)&s=1/.test(url), "URL形式不正: " + url);
   });
 
   await bt("bt17", "プリセットURL(?work=&f=&s=)で花が自動配置される", async (page) => {
-    await page.goto(`${BASE}?work=W001&f=F012&s=1.3`);
+    await page.goto(`${BASE}?work=W001&f=F023&s=1.3`);
     await page.click("#startBtn");
     await page.waitForSelector("#layer .bloom", { timeout: 5000 });
     const scale = await page.evaluate(() => document.querySelector("#layer .bloom")._state.scale);
@@ -277,7 +281,7 @@ async function run() {
   });
 
   await bt("bt18", "不適合プリセットは拒否されトースト表示", async (page) => {
-    await page.goto(`${BASE}?work=W001&f=F031&s=1.0`);
+    await page.goto(`${BASE}?work=W001&f=F015&s=1.0`);
     await page.click("#startBtn");
     await page.waitForTimeout(600);
     const count = await page.$$eval("#layer .bloom", els => els.length);

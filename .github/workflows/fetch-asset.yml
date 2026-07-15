@@ -1,16 +1,13 @@
 # 一時的な素材中継ワークフロー（AI生成画像のダウンロード用・作業完了後に削除する）
 # 実行環境のネットワークポリシーでCanva等へ直接アクセスできないため、
 # Actionsランナーを中継してファイルを取得し、ブランチにコミットする。
+# 使い方: _fetch_request.txt（各行「ファイル名 URL」）をこのブランチにpushすると発火し、
+#         _incoming/ に取得結果がコミットされる。
 name: fetch-asset (temporary relay)
 on:
-  workflow_dispatch:
-    inputs:
-      urls:
-        description: 'Space-separated URLs to fetch'
-        required: true
-      names:
-        description: 'Space-separated output filenames (same count/order as urls)'
-        required: true
+  push:
+    branches: ['claude/ar-flower-onboarding-rd7ahn']
+    paths: ['_fetch_request.txt']
 permissions:
   contents: write
 jobs:
@@ -19,17 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch files
-        env:
-          URLS: ${{ inputs.urls }}
-          NAMES: ${{ inputs.names }}
         run: |
           mkdir -p _incoming
-          set -- $NAMES
-          for u in $URLS; do
-            n="$1"; shift
-            echo "fetching $u -> _incoming/$n"
-            curl -sSL --max-time 120 -o "_incoming/$n" "$u"
-          done
+          while read -r name url; do
+            [ -z "$name" ] && continue
+            echo "fetching $url -> _incoming/$name"
+            curl -sSL --max-time 120 -o "_incoming/$name" "$url"
+          done < _fetch_request.txt
           ls -la _incoming
           file _incoming/* || true
       - name: Commit to branch
