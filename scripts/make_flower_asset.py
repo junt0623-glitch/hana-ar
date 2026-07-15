@@ -14,7 +14,8 @@
   7. base64     : hana-ar.html の flowers[].img に貼れる data URI とJSON断片を出力。
 
 使い方:
-  python3 scripts/make_flower_asset.py 入力画像 出力名.webp [--tolerance 28] [--gradient] [--morimono]
+  python3 scripts/make_flower_asset.py 入力画像 出力名.webp [--ml] [--tolerance 28] [--gradient] [--morimono]
+  推奨（最高精度・ML）: python3 scripts/make_flower_asset.py input.jpg out.webp --ml
   例（無地背景の一枝もの）: python3 scripts/make_flower_asset.py _incoming/regen3.jpg winter-bunjin-robai.webp
   例（グラデ背景の一枝もの）: python3 scripts/make_flower_asset.py _incoming/botan1.jpg spring-bunjin-botan.webp --gradient
   例（盛物）: python3 scripts/make_flower_asset.py _incoming/busshu3.jpg winter-morimono-busshukan.webp --morimono
@@ -152,6 +153,58 @@ def _global_bg_mask(img_rgba, tolerance, gradient):
             if ok:
                 mask[row + x] = 1
     return mask, bg
+
+
+def remove_background_ml(img, model="isnet-general-use", despill=True):
+    """機械学習セグメンテーション（rembg / ONNX）による最高精度の背景除去。
+
+    色ベース（flood fill / global）では原理的に残る「被写体色と背景色が近い領域」や
+    「葉に囲まれた背景ポケット」を、学習済みモデルの被写体理解で正確に分離する。
+    ソフトアルファ（髪の毛状の細部）もモデルが直接出力する。
+
+    仕上げに、半透明エッジ画素から背景色の混色分を差し引くエッジ除染（despill）を行う。
+
+    必要環境: pip install "rembg[cpu]" numpy scipy ＋ モデルファイル
+    （~/.u2net/isnet-general-use.onnx。ネットワーク制約下では別途配置する）
+    """
+    import numpy as np
+    from scipy import ndimage
+    from rembg import new_session, remove as rembg_remove
+
+    src = img.convert("RGB")
+    rgba = rembg_remove(src, session=new_session(model))
+    if not despill:
+        return rgba
+
+    arr = np.asarray(src, dtype=np.float32)
+    out = np.asarray(rgba, dtype=np.float32).copy()
+    alpha = out[:, :, 3] / 255.0
+
+    # ごく低いアルファのハロ（モデルが迷った影領域など）を切り捨てる。
+    # 放置するとトリムのbboxが不可視領域まで広がり、アンカーもずれる
+    alpha[alpha < 0.06] = 0.0
+
+    # 微小な孤立塊（面積 < 0.02% の切り抜き残り）を除去
+    solid = alpha > 0.5
+    lbl, n = ndimage.label(solid)
+    if n > 1:
+        h, w = alpha.shape
+        sizes = ndimage.sum(np.ones_like(lbl), lbl, index=range(1, n + 1))
+        keep = np.where(sizes >= max(30.0, 0.0002 * h * w))[0] + 1
+        alpha[solid & ~np.isin(lbl, keep)] = 0.0
+
+    bg_mask = alpha < 0.05
+    if bg_mask.any() and (~bg_mask).any():
+        idx = ndimage.distance_transform_edt(~bg_mask, return_distances=False,
+                                             return_indices=True)
+        bg_field = arr[tuple(idx)]
+        a3 = alpha[:, :, None]
+        partial = (alpha > 0.02) & (alpha < 0.98)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            fg = (arr - (1.0 - a3) * bg_field) / np.where(a3 > 0, a3, 1.0)
+        out[:, :, :3][partial] = np.clip(fg, 0, 255)[partial]
+    out[:, :, 3] = alpha * 255.0
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
 
 
 def remove_background_precise(img, tolerance=28, gradient=False, band=3,
@@ -311,13 +364,18 @@ def main():
     ap.add_argument("--global", dest="global_bg", action="store_true",
                     help="連結性を使わず色だけで背景除去（葉に囲まれた内部の背景ポケットも除去）。"
                          "被写体に淡色・無彩色部分が無い花材専用（例: 桂花・石榴花）")
+    ap.add_argument("--ml", action="store_true",
+                    help="機械学習セグメンテーション（rembg/isnet）で背景除去する【最高精度・推奨】。"
+                         "要 rembg[cpu] とモデルファイル（~/.u2net/isnet-general-use.onnx）")
     ap.add_argument("--legacy", action="store_true",
                     help="numpy/scipyを使わず旧フリンジ抑制方式で処理する（フォールバック）")
     args = ap.parse_args()
 
     img = Image.open(args.input)
     lo, hi = (args.feather if args.feather else (None, None))
-    if args.legacy:
+    if args.ml:
+        img = remove_background_ml(img)
+    elif args.legacy:
         img = remove_background(img, args.tolerance, gradient=args.gradient)
     else:
         try:
