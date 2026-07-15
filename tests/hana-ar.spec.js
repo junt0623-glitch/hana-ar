@@ -109,10 +109,13 @@ async function run() {
     assert(w > 0, "video要素にカメラ映像が来ていない");
   });
 
-  await bt("bt04", "器適合: W001は梅・水仙・蝋梅のみサムネイル表示", async (page) => {
+  await bt("bt04", "器適合: W001の冬タブは梅・水仙・蝋梅のみサムネイル表示", async (page) => {
     await page.goto(`${BASE}?work=W001`);
     await page.click("#startBtn");
     await page.waitForSelector("#thumbs .thumb", { timeout: 5000 });
+    // W001は夏(石榴花)・秋(桂花)・冬(梅/水仙/蝋梅)が適合し既定は夏タブのため、冬タブを選んで検証する
+    await page.click('#seasonTabs .tab[data-season="winter"]');
+    await page.waitForSelector("#thumbs .thumb");
     const names = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()).sort());
     assert.deepStrictEqual(names, ["水仙", "梅", "蝋梅"].sort(), "got: " + JSON.stringify(names));
   });
@@ -125,12 +128,18 @@ async function run() {
     assert(!names.includes("松竹梅"), "松竹梅が出てしまっている");
   });
 
-  await bt("bt06", "器適合: W003は蓮のみ表示", async (page) => {
+  await bt("bt06", "器適合: W003は夏タブ=蓮・冬タブ=仏手柑(盛物)", async (page) => {
     await page.goto(`${BASE}?work=W003`);
     await page.click("#startBtn");
     await page.waitForSelector("#thumbs .thumb");
-    const names = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()));
-    assert.deepStrictEqual(names, ["蓮"]);
+    // 既定は夏タブ（蓮のみ）
+    const summer = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()));
+    assert.deepStrictEqual(summer, ["蓮"], "夏タブ got: " + JSON.stringify(summer));
+    // 水盤は盛物も受けるので冬タブに仏手柑が出る
+    await page.click('#seasonTabs .tab[data-season="winter"]');
+    await page.waitForSelector("#thumbs .thumb");
+    const winter = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()));
+    assert.deepStrictEqual(winter, ["仏手柑"], "冬タブ got: " + JSON.stringify(winter));
   });
 
   await bt("bt07", "花サムネイルタップで配置される", async (page) => {
@@ -235,14 +244,15 @@ async function run() {
     }
   });
 
-  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花3件)", async (page) => {
+  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花5件)", async (page) => {
     await page.goto(`${BASE}?mode=maker`);
     await page.waitForSelector("#maker.active");
     const opts = await page.$$eval("#workSelect option", els => els.length);
     assert.strictEqual(opts, 3);
     await page.waitForSelector("#makerThumbs .thumb");
+    // メーカーは季節を跨いで適合花を全表示。W001は梅・水仙・蝋梅・石榴花・桂花の5件
     const thumbs = await page.$$eval("#makerThumbs .thumb", els => els.length);
-    assert.strictEqual(thumbs, 3, "W001の適合花は3件のはず, got " + thumbs);
+    assert.strictEqual(thumbs, 5, "W001の適合花は5件のはず, got " + thumbs);
   });
 
   await bt("bt15", "メーカーモードでQRコードが生成される", async (page) => {

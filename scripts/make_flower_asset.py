@@ -14,8 +14,10 @@
   7. base64     : hana-ar.html の flowers[].img に貼れる data URI とJSON断片を出力。
 
 使い方:
-  python3 scripts/make_flower_asset.py 入力画像 出力名.webp [--tolerance 28]
-  例: python3 scripts/make_flower_asset.py _incoming/regen3.jpg winter-bunjin-robai.webp
+  python3 scripts/make_flower_asset.py 入力画像 出力名.webp [--tolerance 28] [--gradient] [--morimono]
+  例（無地背景の一枝もの）: python3 scripts/make_flower_asset.py _incoming/regen3.jpg winter-bunjin-robai.webp
+  例（グラデ背景の一枝もの）: python3 scripts/make_flower_asset.py _incoming/botan1.jpg spring-bunjin-botan.webp --gradient
+  例（盛物）: python3 scripts/make_flower_asset.py _incoming/busshu3.jpg winter-morimono-busshukan.webp --morimono
 出力:
   出力名.webp / 出力名.webp.json（アンカー・サイズ・data URI を含むメタ情報）
 """
@@ -27,12 +29,17 @@ from collections import deque
 from PIL import Image
 
 
-def flood_background_mask(img, tolerance):
-    """四辺から背景色連結領域を探索し、背景画素の集合(bytearray mask)を返す"""
+def flood_background_mask(img, tolerance, gradient=False, sat_tol=30, local_tol=16):
+    """四辺から背景連結領域を探索し、背景画素の集合(bytearray mask)を返す。
+
+    通常モード: 各画素を四辺平均の背景色と比較（tolerance以内なら背景）。無地背景向け。
+    gradientモード: 背景がグラデーション（口径の広い花器の陰影・ビネット等）でも扱えるよう、
+      「低彩度（sat_tol以内）かつ隣接背景画素との明度差がlocal_tol以内」で連結を広げる。
+      彩度の高い花弁・葉・枝には侵入せず、明度が緩やかに変化する無彩色背景だけを辿る。
+    """
     w, h = img.size
     px = img.load()
 
-    # 背景基準色: 四辺の画素の平均（無地背景前提）
     border = []
     for x in range(w):
         border.append(px[x, 0][:3])
@@ -43,37 +50,54 @@ def flood_background_mask(img, tolerance):
     n = len(border)
     bg = tuple(sum(c[i] for c in border) // n for i in range(3))
 
-    def is_bg(c):
-        return (abs(c[0] - bg[0]) <= tolerance
-                and abs(c[1] - bg[1]) <= tolerance
-                and abs(c[2] - bg[2]) <= tolerance)
+    def lum(c):
+        return (c[0] * 299 + c[1] * 587 + c[2] * 114) // 1000
+
+    def sat(c):
+        return max(c) - min(c)
+
+    if gradient:
+        def seed_ok(c):
+            return sat(c) <= sat_tol and abs(lum(c) - lum(bg)) <= tolerance
+
+        def grow_ok(c, src):
+            return sat(c) <= sat_tol and abs(lum(c) - lum(src)) <= local_tol
+    else:
+        def seed_ok(c):
+            return (abs(c[0] - bg[0]) <= tolerance
+                    and abs(c[1] - bg[1]) <= tolerance
+                    and abs(c[2] - bg[2]) <= tolerance)
+
+        def grow_ok(c, src):
+            return seed_ok(c)
 
     mask = bytearray(w * h)  # 1 = 背景
     q = deque()
     for x in range(w):
         for y in (0, h - 1):
-            if not mask[y * w + x] and is_bg(px[x, y][:3]):
+            if not mask[y * w + x] and seed_ok(px[x, y][:3]):
                 mask[y * w + x] = 1
                 q.append((x, y))
     for y in range(h):
         for x in (0, w - 1):
-            if not mask[y * w + x] and is_bg(px[x, y][:3]):
+            if not mask[y * w + x] and seed_ok(px[x, y][:3]):
                 mask[y * w + x] = 1
                 q.append((x, y))
     while q:
         x, y = q.popleft()
+        src = px[x, y][:3]
         for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
             if 0 <= nx < w and 0 <= ny < h and not mask[ny * w + nx]:
-                if is_bg(px[nx, ny][:3]):
+                if grow_ok(px[nx, ny][:3], src):
                     mask[ny * w + nx] = 1
                     q.append((nx, ny))
     return mask, bg
 
 
-def remove_background(img, tolerance):
+def remove_background(img, tolerance, gradient=False):
     img = img.convert("RGBA")
     w, h = img.size
-    mask, bg = flood_background_mask(img, tolerance)
+    mask, bg = flood_background_mask(img, tolerance, gradient=gradient)
     px = img.load()
     # 背景を透過に
     for y in range(h):
@@ -117,8 +141,14 @@ def trim_and_resize(img, target_h=1200, max_long=1600, pad=8):
     return img
 
 
-def compute_anchor(img, band=6):
-    """最下端の不透明画素帯(band px)の重心 → 相対座標 {x, y}（「留め」の位置）"""
+def compute_anchor(img, morimono=False):
+    """アンカー（配置エンジンが器の口に合わせる基準点）を相対座標 {x, y} で返す。
+
+    通常（一枝もの）: 「留め」= 最下端の不透明画素帯の重心。茎の切り口が器の口に来る。
+    盛物（morimono）: 茎の留めが無く器（盤）の上に果実・株が載る構成のため、
+      全不透明画素の水平重心・最下端を基準にする（左右に張り出す葉に引っ張られないよう
+      帯ではなく全体重心のxを使う）。
+    """
     w, h = img.size
     alpha = img.getchannel("A").load()
     bottom = None
@@ -126,10 +156,14 @@ def compute_anchor(img, band=6):
         if any(alpha[x, y] > 32 for x in range(w)):
             bottom = y
             break
-    xs = []
-    for y in range(max(0, bottom - band + 1), bottom + 1):
-        xs.extend(x for x in range(w) if alpha[x, y] > 32)
-    ax = sum(xs) / len(xs) / w
+    if morimono:
+        xs = [x for y in range(h) for x in range(w) if alpha[x, y] > 32]
+        ax = sum(xs) / len(xs) / w
+    else:
+        band = 6
+        xs = [x for y in range(max(0, bottom - band + 1), bottom + 1)
+              for x in range(w) if alpha[x, y] > 32]
+        ax = sum(xs) / len(xs) / w
     ay = bottom / h
     return {"x": round(ax, 3), "y": round(ay, 3)}
 
@@ -150,12 +184,17 @@ def main():
     ap.add_argument("output")
     ap.add_argument("--tolerance", type=int, default=28,
                     help="背景色の許容差（無地背景のムラに応じて調整。既定28）")
+    ap.add_argument("--gradient", action="store_true",
+                    help="背景がグラデーション（口径の広い花器の陰影・ビネット等）の場合に指定。"
+                         "低彩度＋近傍明度差で背景を辿る")
+    ap.add_argument("--morimono", action="store_true",
+                    help="盛物（茎の留めが無く器の上に載る構成）。アンカーを全体水平重心にする")
     args = ap.parse_args()
 
     img = Image.open(args.input)
-    img = remove_background(img, args.tolerance)
+    img = remove_background(img, args.tolerance, gradient=args.gradient)
     img = trim_and_resize(img)
-    anchor = compute_anchor(img)
+    anchor = compute_anchor(img, morimono=args.morimono)
     q, kb = save_webp(img, args.output)
 
     data = base64.b64encode(open(args.output, "rb").read()).decode()
