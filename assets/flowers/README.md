@@ -10,6 +10,10 @@
 | spring-bunjin-botan.webp | F029 | 牡丹 | ③ Canva AI | 考証チェック待ち |
 | summer-bunjin-zakurobana.webp | F009 | 石榴花 | ③ Canva AI | 考証チェック待ち |
 | autumn-bunjin-keika.webp | F016 | 桂花 | ③ Canva AI | 考証チェック待ち |
+| spring-bunjin-ume-zanshun.webp | F001 | 梅（残春） | ①の暫定(AI生成) | 考証チェック待ち |
+| spring-bunjin-kaido.webp | F002 | 海棠 | ①の暫定(AI生成) | 考証チェック待ち |
+| spring-bunjin-ran.webp | F003 | 蘭 | ①の暫定(AI生成) | 考証チェック待ち |
+| spring-gyo-momo.webp | F004 | 桃 | ②の暫定(AI生成) | 考証チェック待ち |
 
 考証チェックで不採用になった花材は、`hana-ar.html` の該当 `FLOWERS` エントリを削除し、
 `素材調達管理シート.xlsx` の状態を戻すこと。

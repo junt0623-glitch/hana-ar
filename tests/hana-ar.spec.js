@@ -238,15 +238,16 @@ async function run() {
     }
   });
 
-  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花5件)", async (page) => {
+  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花9件)", async (page) => {
     await page.goto(`${BASE}?mode=maker`);
     await page.waitForSelector("#maker.active");
     const opts = await page.$$eval("#workSelect option", els => els.length);
     assert.strictEqual(opts, 3);
     await page.waitForSelector("#makerThumbs .thumb");
-    // メーカーは季節を跨いで適合花を全表示。W001は梅・水仙・蝋梅・石榴花・桂花の5件
+    // メーカーは季節を跨いで適合花を全表示。
+    // W001: 梅・水仙・蝋梅・石榴花・桂花＋春4種(梅(残春)・海棠・蘭・桃)の9件
     const thumbs = await page.$$eval("#makerThumbs .thumb", els => els.length);
-    assert.strictEqual(thumbs, 5, "W001の適合花は5件のはず, got " + thumbs);
+    assert.strictEqual(thumbs, 9, "W001の適合花は9件のはず, got " + thumbs);
   });
 
   await bt("bt15", "メーカーモードでQRコードが生成される", async (page) => {
