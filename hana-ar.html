@@ -45,7 +45,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 #layer{position:absolute;inset:0;overflow:hidden;touch-action:none}
 .bloom{position:absolute;left:0;top:0;transform-origin:center bottom;will-change:transform;
   filter:drop-shadow(0 6px 14px rgba(0,0,0,.45))}
-.bloom img{display:block;width:220px;height:auto;pointer-events:none}
+.bloom img{display:block;height:340px;width:auto;pointer-events:none}
 .bloom.selected{outline:1.5px dashed rgba(255,255,255,.7);outline-offset:6px}
 
 /* 上部バー */
@@ -83,6 +83,20 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .shutter{width:68px;height:68px;border-radius:50%;background:#fff;
   border:4px solid rgba(255,255,255,.5);box-shadow:0 0 0 2px rgba(0,0,0,.3)}
 .shutter:active{transform:scale(.94)}
+
+/* 大きさスライダー */
+.size-row{display:flex;align-items:center;gap:12px;padding:2px 20px 10px}
+.size-row .cap{color:#fff;font-size:12px;opacity:.85;flex:0 0 auto;letter-spacing:.05em}
+.size-row input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;
+  background:rgba(255,255,255,.3);outline:none;margin:0}
+.size-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+  width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer}
+.size-row input[type=range]::-moz-range-thumb{width:28px;height:28px;border-radius:50%;
+  background:#fff;border:none;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer}
+.size-row.mk .cap{color:var(--sumi)}
+.size-row.mk input[type=range]{background:rgba(0,0,0,.15)}
+.size-row.mk input[type=range]::-webkit-slider-thumb{background:var(--seiji)}
+.size-row.mk input[type=range]::-moz-range-thumb{background:var(--seiji)}
 
 /* 操作ヒント */
 .hint{position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:4;
@@ -171,12 +185,17 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
     <button class="icon-btn" id="clearBtn" title="花を消す">🗑</button>
   </div>
 
-  <div class="hint" id="hint">ドラッグで移動・二本指で拡大縮小と回転</div>
+  <div class="hint" id="hint">ドラッグで移動・スライダーで大きさ・二本指で回転</div>
 
   <div class="panel">
     <div class="tabs" id="seasonTabs"></div>
     <div class="tab-row" id="styleTabs"></div>
     <div class="thumbs" id="thumbs"></div>
+    <div class="size-row" id="sizeRow">
+      <span class="cap">小</span>
+      <input type="range" id="sizeSlider" min="0" max="100" value="43" aria-label="花の大きさ">
+      <span class="cap">大</span>
+    </div>
     <div class="shutter-wrap"><button class="shutter" id="shutter" title="保存"></button></div>
   </div>
 </section>
@@ -196,6 +215,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
     <div class="mk-row"><span>作品写真</span><input type="file" id="photoInput" accept="image/*"></div>
     <div class="mk-row"><span>作品</span><select id="workSelect"></select></div>
     <div class="mk-thumbs thumbs" id="makerThumbs"></div>
+    <div class="size-row mk" id="mkSizeRow">
+      <span class="cap">小</span>
+      <input type="range" id="mkSizeSlider" min="0" max="100" value="43" aria-label="花の大きさ">
+      <span class="cap">大</span>
+    </div>
     <button class="mk-make" id="makeQRBtn">この花でQRコードを作成</button>
   </div>
 </section>
@@ -413,6 +437,24 @@ let sel = { season:null, style:null };
 let placed = [];          // {node, x, y, scale, rot}
 let activeBloom = null;
 
+/* ── 表示サイズ・スケール ── */
+const DISP_H = 340;       // 花材の基準表示高さ(px)。全花材をこの高さに正規化し縮尺をそろえる
+const SMIN = 0.25, SMAX = 2.0;  // スライダー0〜100%が対応する倍率レンジ
+const pctToScale = p => SMIN + (p/100)*(SMAX-SMIN);
+const scaleToPct = sc => Math.round((sc-SMIN)/(SMAX-SMIN)*100);
+// 画像の表示寸法(高さ基準)。デコード前は概算でフォールバック
+function dispDims(img){
+  let iw=img.naturalWidth, ih=img.naturalHeight;
+  if(!iw||!ih){ iw=220; ih=DISP_H; }
+  const h=DISP_H, w=h*(iw/ih);
+  return {w,h};
+}
+function setBloomScale(state, pct){ state.scale=pctToScale(+pct); applyTransform(state); }
+function syncSizeSlider(){
+  const sl=$("#sizeSlider"); if(!sl||!activeBloom) return;
+  sl.value=scaleToPct(activeBloom.scale);
+}
+
 /* ── モーダル（Promise化） ── */
 function confirmModal(title, body, okLabel="OK"){
   return new Promise(res=>{
@@ -522,6 +564,10 @@ function createBloom(f, layer){
   node._state=state;
   attachGestures(state);
   applyTransform(state);
+  // データURIのデコード完了後に正確な寸法で再配置（アンカーずれ防止）
+  const bimg=node.querySelector("img");
+  if(!(bimg.complete && bimg.naturalWidth))
+    bimg.addEventListener("load",()=>applyTransform(state),{once:true});
   return state;
 }
 function placeFlower(f){
@@ -545,14 +591,13 @@ function applyPreset(){
   renderStyleTabs(); renderThumbs(); markTabs();
   const st=placeFlower(f);
   const s=parseFloat(p.get("s"));
-  if(s>=0.3 && s<=4){ st.scale=s; applyTransform(st); }
+  if(s>=0.3 && s<=4){ st.scale=s; applyTransform(st); syncSizeSlider(); }
   toast(`「${f.name}」を生けてみましょう`);
   return st;
 }
 function applyTransform(s){
   const img=s.node.querySelector("img");
-  const iw=img.naturalWidth||220, ih=img.naturalHeight||330;
-  const dispW=220, dispH=dispW*(ih/iw);
+  const {w:dispW,h:dispH}=dispDims(img);
   // アンカー点が (s.x,s.y) に来るよう左上を逆算
   const ax=s.anchor.x*dispW, ay=s.anchor.y*dispH;
   s.node.style.transform=
@@ -564,6 +609,7 @@ function selectBloom(s){
   if(s){ s.node.classList.add("selected");
     s.node.parentNode.appendChild(s.node); } // 前面へ
   activeBloom=s;
+  syncSizeSlider();
 }
 
 /* ── ジェスチャ（Pointer Events自前実装・依存ゼロ） ── */
@@ -579,10 +625,8 @@ function attachGestures(s){
       start={mode:"move",px:e.clientX,py:e.clientY,x:s.x,y:s.y};
     }else if(pts.size===2){
       const [a,b]=[...pts.values()];
-      start={mode:"pinch",
-        dist:Math.hypot(a.x-b.x,a.y-b.y),
-        ang:Math.atan2(b.y-a.y,b.x-a.x),
-        scale:s.scale,rot:s.rot};
+      // 二本指は回転のみ（拡縮はスライダーに分離）
+      start={mode:"rotate",ang:Math.atan2(b.y-a.y,b.x-a.x),rot:s.rot};
     }
   });
   node.addEventListener("pointermove",e=>{
@@ -594,12 +638,10 @@ function attachGestures(s){
       applyTransform(s);
     }else if(pts.size===2 && start){
       const [a,b]=[...pts.values()];
-      const dist=Math.hypot(a.x-b.x,a.y-b.y);
       const ang=Math.atan2(b.y-a.y,b.x-a.x);
-      if(start.mode!=="pinch"){
-        start={mode:"pinch",dist,ang,scale:s.scale,rot:s.rot};
+      if(start.mode!=="rotate"){
+        start={mode:"rotate",ang,rot:s.rot};
       }else{
-        s.scale=Math.max(.3,Math.min(4,start.scale*(dist/start.dist)));
         s.rot=start.rot+(ang-start.ang)*180/Math.PI;
         applyTransform(s);
       }
@@ -649,8 +691,7 @@ async function capture(){
   const wasSel=activeBloom; selectBloom(null);
   for(const s of placed){
     const img=s.node.querySelector("img");
-    const iw=img.naturalWidth||220, ih=img.naturalHeight||330;
-    const dispW=220, dispH=dispW*(ih/iw);
+    const {w:dispW,h:dispH}=dispDims(img);
     const ax=s.anchor.x*dispW, ay=s.anchor.y*dispH;
     ctx.save();
     ctx.translate(s.x,s.y);
@@ -690,6 +731,7 @@ function renderMakerThumbs(){
       if(makerBloom) makerBloom.node.remove();
       makerBloom=createBloom(f, $("#makerLayer"));
       selectBloom(null);
+      $("#mkSizeSlider").value=scaleToPct(makerBloom.scale);
     };
     box.appendChild(t);
   });
@@ -721,6 +763,9 @@ function initMaker(){
     };
     r.readAsDataURL(file);
   };
+  $("#mkSizeSlider").addEventListener("input",e=>{
+    if(makerBloom) setBloomScale(makerBloom, e.target.value);
+  });
   $("#makeQRBtn").onclick=makeQRCard;
   $("#qClose").onclick=()=>$("#qrSheet").classList.remove("active");
   $("#qSave").onclick=saveQRCard;
@@ -798,6 +843,9 @@ $("#clearBtn").onclick=async()=>{
   if(ok){ placed.forEach(p=>p.node.remove()); placed=[]; activeBloom=null; toast("花を消しました"); }
 };
 $("#shutter").onclick=capture;
+$("#sizeSlider").addEventListener("input",e=>{
+  if(activeBloom) setBloomScale(activeBloom, e.target.value);
+});
 $("#layer").addEventListener("pointerdown",e=>{
   if(e.target.id==="layer") selectBloom(null);
 });
