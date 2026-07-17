@@ -48,6 +48,21 @@ const BASE = `http://localhost:${PORT}/${HTML_FILE}`;
 const results = [];
 let browser, context, httpServer;
 
+// アプリの難読化トークン（?d=）と同一仕様のエンコード/デコード（XOR＋base64url）
+const OBF_KEY = "hana-ar-2026";
+function obEnc(s) {
+  const b = Buffer.from(s, "utf8");
+  for (let i = 0; i < b.length; i++) b[i] ^= OBF_KEY.charCodeAt(i % OBF_KEY.length);
+  return b.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function obDec(t) {
+  t = t.replace(/-/g, "+").replace(/_/g, "/");
+  while (t.length % 4) t += "=";
+  const b = Buffer.from(t, "base64");
+  for (let i = 0; i < b.length; i++) b[i] ^= OBF_KEY.charCodeAt(i % OBF_KEY.length);
+  return b.toString("utf8");
+}
+
 async function bt(id, name, fn) {
   const page = await context.newPage();
   const errors = [];
@@ -153,8 +168,10 @@ async function run() {
     await page.click("#thumbs .thumb");
     await page.waitForSelector("#layer .bloom");
     const before = await page.evaluate(() => document.querySelector("#layer .bloom")._state.x);
+    // ピクセル判定になったため、確実に不透明な「茎の根元」（アンカーx・高さ90%）を掴む
     const box = await page.$eval("#layer .bloom", el => {
-      const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      const r = el.getBoundingClientRect(); const a = el._state.anchor;
+      return { x: r.x + r.width * a.x, y: r.y + r.height * 0.9 };
     });
     await page.mouse.move(box.x, box.y);
     await page.mouse.down();
@@ -267,14 +284,17 @@ async function run() {
     assert(hasPixels > 100, "QRらしき黒画素が少なすぎる: " + hasPixels);
   });
 
-  await bt("bt16", "メーカーQRのURLパラメータが正しい", async (page) => {
+  await bt("bt16", "メーカーQRのURLが難読化トークン(?d=)で正しい内容を持つ", async (page) => {
     await page.goto(`${BASE}?mode=maker`);
     await page.waitForSelector("#makerThumbs .thumb");
     await page.click("#makerThumbs .thumb");
     await page.click("#makeQRBtn");
     await page.waitForSelector("#qrSheet.active");
     const url = await page.textContent("#qUrl");
-    assert(/\?work=W001&f=F0(21|22|23)&s=1/.test(url), "URL形式不正: " + url);
+    assert(/\?d=[A-Za-z0-9_-]+$/.test(url), "トークン形式でない: " + url);
+    const token = url.split("?d=")[1];
+    const plain = obDec(token);
+    assert(/^work=W001&f=F0(21|22|23)&s=1/.test(plain), "復号内容不正: " + plain);
   });
 
   await bt("bt17", "プリセットURL(?work=&f=&s=)で花が自動配置される", async (page) => {
@@ -291,6 +311,31 @@ async function run() {
     await page.waitForTimeout(600);
     const count = await page.$$eval("#layer .bloom", els => els.length);
     assert.strictEqual(count, 0, "不適合花が配置されてしまっている");
+  });
+
+  await bt("bt19", "難読化トークンURL(?d=)でも花が自動配置される", async (page) => {
+    const token = obEnc("work=W001&f=F023&s=1.3");
+    await page.goto(`${BASE}?d=${token}`);
+    await page.click("#startBtn");
+    await page.waitForSelector("#layer .bloom", { timeout: 5000 });
+    const scale = await page.evaluate(() => document.querySelector("#layer .bloom")._state.scale);
+    assert(Math.abs(scale - 1.3) < 0.01, "scale不正: " + scale);
+  });
+
+  await bt("bt20", "器の口線で線より下の花がクリップされる", async (page) => {
+    await page.goto(`${BASE}?work=W001`);
+    await page.click("#startBtn");
+    await page.waitForSelector("#thumbs .thumb");
+    await page.click("#thumbs .thumb");
+    await page.waitForSelector("#layer .bloom");
+    await page.click("#vesselBtn");
+    const clip = await page.$eval("#layer", el => el.style.clipPath);
+    assert(/inset/.test(clip), "クリップ未適用: " + clip);
+    const lineOn = await page.$eval("#mouthLine", el => el.classList.contains("on"));
+    assert(lineOn, "口線が表示されていない");
+    await page.click("#vesselBtn"); // 解除
+    const clip2 = await page.$eval("#layer", el => el.style.clipPath);
+    assert(!clip2, "クリップが解除されていない: " + clip2);
   });
 
   await browser.close();

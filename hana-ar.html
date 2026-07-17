@@ -44,8 +44,17 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
 #layer{position:absolute;inset:0;overflow:hidden;touch-action:none}
 .bloom{position:absolute;left:0;top:0;transform-origin:center bottom;will-change:transform;
-  filter:drop-shadow(0 6px 14px rgba(0,0,0,.45))}
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));pointer-events:none}
 .bloom img{display:block;height:340px;width:auto;pointer-events:none}
+
+/* 器の口線（これより下の花は「器の中」として非表示になる） */
+.mouth-line{position:absolute;left:0;right:0;height:34px;z-index:4;display:none;
+  touch-action:none;cursor:ns-resize}
+.mouth-line.on{display:block}
+.mouth-line .bar{position:absolute;left:8px;right:8px;top:16px;border-top:2px dashed rgba(255,255,255,.85);
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.mouth-line .tag{position:absolute;top:0;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:3px 10px;border-radius:100px;white-space:nowrap}
 .bloom.selected{outline:1.5px dashed rgba(255,255,255,.7);outline-offset:6px}
 
 /* 上部バー */
@@ -63,7 +72,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
 /* サイドレール（選択UIを左右端に振り分け、画面中央を塞がない）
    左＝季節・様式タブ／右＝花材サムネイル（縦並び） */
-.side-rail{position:absolute;top:60px;bottom:170px;width:96px;z-index:5;
+.side-rail{position:absolute;top:60px;bottom:210px;width:96px;z-index:5;
   display:flex;flex-direction:column;gap:10px;padding:10px 8px}
 .rail-left{left:0;background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
 .rail-right{right:0;background:linear-gradient(270deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
@@ -108,7 +117,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;
   opacity:.35;pointer-events:none;transition:opacity .2s}
 .bloom-del.on{opacity:1;pointer-events:auto;background:rgba(180,60,50,.85)}
-.size-row{display:flex;align-items:center;gap:10px;padding:2px 4px 8px}
+.size-row{display:flex;align-items:center;gap:10px;padding:8px 4px}
+.sliders .size-row+.size-row{margin-top:12px} /* 2本のバーの間隔（誤タッチ防止） */
 .size-row .cap{color:#fff;font-size:11px;opacity:.85;flex:0 0 44px;letter-spacing:.05em}
 .size-row input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;
   background:rgba(255,255,255,.3);outline:none;margin:0}
@@ -205,7 +215,13 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
   <div class="topbar">
     <div class="t-title" id="stageTitle"></div>
+    <button class="icon-btn" id="vesselBtn" title="器の口の高さを設定">器</button>
     <button class="icon-btn" id="clearBtn" title="花を消す">🗑</button>
+  </div>
+
+  <div class="mouth-line" id="mouthLine">
+    <div class="bar"></div>
+    <div class="tag">器の口 — 上下にドラッグ</div>
   </div>
 
   <div class="hint" id="hint">ドラッグで移動・下のスライダーで大きさと回転</div>
@@ -513,8 +529,37 @@ function toast(msg){
 
 /* ── 作品特定 ── */
 function LOC(){ return location; }
+
+/* URLパラメータの難読化（?d=トークン）。
+   来館者のアドレスバーやQRに work=W001 等の生パラメータを見せないための可逆難読化
+   （XOR＋base64url。クライアント内の仕組みのため厳密な暗号ではない）。
+   従来の ?work=... 形式もそのまま受け付ける（互換維持）。 */
+const OBF_KEY="hana-ar-2026";
+function obEnc(s){
+  const b=new TextEncoder().encode(s);
+  for(let i=0;i<b.length;i++) b[i]^=OBF_KEY.charCodeAt(i%OBF_KEY.length);
+  let bin=""; b.forEach(c=>bin+=String.fromCharCode(c));
+  return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function obDec(t){
+  try{
+    t=t.replace(/-/g,"+").replace(/_/g,"/");
+    while(t.length%4) t+="=";
+    const bin=atob(t);
+    const b=new Uint8Array([...bin].map(c=>c.charCodeAt(0)));
+    for(let i=0;i<b.length;i++) b[i]^=OBF_KEY.charCodeAt(i%OBF_KEY.length);
+    return new TextDecoder().decode(b);
+  }catch(e){ return ""; }
+}
+function getParams(){
+  const raw=new URLSearchParams(LOC().search);
+  const d=raw.get("d");
+  if(d){ const s=obDec(d); if(s) return new URLSearchParams(s); }
+  return raw;
+}
+
 function loadWork(){
-  const params = new URLSearchParams(LOC().search);
+  const params = getParams();
   const id = params.get("work");
   currentWork = WORKS.find(w=>w.id===id) || null;
   if(!currentWork){
@@ -600,7 +645,6 @@ function createBloom(f, layer){
   const state={node, x:lw/2, y:lh*0.62, scale:1, rot:0, flip:false,
                anchor:f.anchor||{x:.5,y:.96}, flower:f};
   node._state=state;
-  attachGestures(state);
   applyTransform(state);
   // データURIのデコード完了後に正確な寸法で再配置（アンカーずれ防止）
   const bimg=node.querySelector("img");
@@ -628,9 +672,9 @@ function placeFlower(f){
   return state;
 }
 
-/* ── QRプリセット（?f=花ID&s=倍率）を反映 ── */
+/* ── QRプリセット（?f=花ID&s=倍率、または難読化トークン?d=）を反映 ── */
 function applyPreset(){
-  const p=new URLSearchParams(LOC().search);
+  const p=getParams();
   const fid=p.get("f");
   if(!fid) return null;
   const f=FLOWERS.find(x=>x.id===fid);
@@ -665,49 +709,94 @@ function selectBloom(s){
   syncSizeSlider();
 }
 
-/* ── ジェスチャ（Pointer Events自前実装・依存ゼロ） ── */
-function attachGestures(s){
-  const node=s.node;
-  const pts=new Map();
-  let start=null;
-  node.addEventListener("pointerdown",e=>{
-    try{ node.setPointerCapture(e.pointerId); }catch(_){/* 合成イベント等でactive pointerが無い場合 */}
-    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    selectBloom(s);
-    if(pts.size===1){
-      start={mode:"move",px:e.clientX,py:e.clientY,x:s.x,y:s.y};
-    }else if(pts.size===2){
-      const [a,b]=[...pts.values()];
-      // 二本指は回転のみ（拡縮はスライダーに分離）
-      start={mode:"rotate",ang:Math.atan2(b.y-a.y,b.x-a.x),rot:s.rot};
+/* ── ジェスチャ（Pointer Events自前実装・依存ゼロ）──
+   レイヤー単位で処理する。タップ位置は「見えている画素」で判定するため、
+   後から置いた花の透明な余白に邪魔されず、どの花でも再選択・再編集できる。 */
+const hitCache=new Map(); // flower.id → {canvas,ctx}
+function hitCtxFor(f, img){
+  let h=hitCache.get(f.id);
+  if(!h && img.naturalWidth){
+    const cv=document.createElement("canvas");
+    cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+    const c=cv.getContext("2d",{willReadFrequently:true});
+    c.drawImage(img,0,0);
+    h={cv,ctx:c}; hitCache.set(f.id,h);
+  }
+  return h;
+}
+// レイヤー座標(px,py)に「不透明な画素」があるbloomを前面から探す。
+// 細い枝でも指で拾えるよう、周囲±10pxもあわせて調べる。
+function bloomAt(layerEl, blooms, px, py){
+  const nodes=[...layerEl.querySelectorAll(".bloom")].reverse(); // 前面優先
+  const probes=[[0,0],[10,0],[-10,0],[0,10],[0,-10],[7,7],[-7,7],[7,-7],[-7,-7]];
+  for(const node of nodes){
+    const s=node._state;
+    if(!s || !blooms.includes(s)) continue;
+    const img=node.querySelector("img");
+    const h=hitCtxFor(s.flower,img);
+    const {w:dispW,h:dispH}=dispDims(img);
+    const ax=s.anchor.x*dispW, ay=s.anchor.y*dispH;
+    const cos=Math.cos(-s.rot*Math.PI/180), sin=Math.sin(-s.rot*Math.PI/180);
+    for(const [ox,oy] of probes){
+      // 画面座標 → アンカー基準 → 逆回転 → 逆スケール（flip考慮）→ 画像座標
+      const dx=px+ox-s.x, dy=py+oy-s.y;
+      let lx=(dx*cos-dy*sin)/s.scale, ly=(dx*sin+dy*cos)/s.scale;
+      if(s.flip) lx=-lx;
+      const ix=lx+ax, iy=ly+ay;
+      if(ix<0||iy<0||ix>=dispW||iy>=dispH) continue;
+      if(!h){ return s; } // デコード前は矩形判定で代用
+      const nx=Math.floor(ix/dispW*h.cv.width), ny=Math.floor(iy/dispH*h.cv.height);
+      if(h.ctx.getImageData(nx,ny,1,1).data[3]>20) return s;
     }
-  });
-  node.addEventListener("pointermove",e=>{
-    if(!pts.has(e.pointerId))return;
+  }
+  return null;
+}
+function attachLayerGestures(layerEl, getBlooms, opts={}){
+  const pts=new Map();
+  let start=null, target=null;
+  layerEl.addEventListener("pointerdown",e=>{
+    try{ layerEl.setPointerCapture(e.pointerId); }catch(_){/* 合成イベント対策 */}
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if(start && start.mode==="move" && pts.size===1){
-      s.x=start.x+(e.clientX-start.px);
-      s.y=start.y+(e.clientY-start.py);
-      applyTransform(s);
-    }else if(pts.size===2 && start){
-      const [a,b]=[...pts.values()];
-      const ang=Math.atan2(b.y-a.y,b.x-a.x);
-      if(start.mode!=="rotate"){
-        start={mode:"rotate",ang,rot:s.rot};
-      }else{
-        s.rot=start.rot+(ang-start.ang)*180/Math.PI;
-        applyTransform(s);
-        const rs=$("#rotSlider");
-        if(rs) rs.value=Math.max(-90,Math.min(90,Math.round(s.rot)));
+    const r=layerEl.getBoundingClientRect();
+    const px=e.clientX-r.left, py=e.clientY-r.top;
+    if(pts.size===1){
+      // 器の口線より下は「器の中」なのでタップ対象外
+      const below=(opts.mouthY && opts.mouthY()!=null && py>opts.mouthY());
+      target=below?null:bloomAt(layerEl,getBlooms(),px,py);
+      if(opts.select!==false) selectBloom(target);
+      start=target?{mode:"move",px:e.clientX,py:e.clientY,x:target.x,y:target.y}:null;
+    }else if(pts.size===2){
+      // 二本指は回転のみ。2本目はどこに置いてもよい（花の上でなくてよい）
+      target=target||activeBloom;
+      if(target){
+        const [a,b]=[...pts.values()];
+        start={mode:"rotate",ang:Math.atan2(b.y-a.y,b.x-a.x),rot:target.rot};
       }
     }
   });
+  layerEl.addEventListener("pointermove",e=>{
+    if(!pts.has(e.pointerId))return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(!target||!start)return;
+    if(start.mode==="move" && pts.size===1){
+      target.x=start.x+(e.clientX-start.px);
+      target.y=start.y+(e.clientY-start.py);
+      applyTransform(target);
+    }else if(pts.size===2 && start.mode==="rotate"){
+      const [a,b]=[...pts.values()];
+      const ang=Math.atan2(b.y-a.y,b.x-a.x);
+      target.rot=start.rot+(ang-start.ang)*180/Math.PI;
+      applyTransform(target);
+      const rs=$("#rotSlider");
+      if(rs) rs.value=Math.max(-90,Math.min(90,Math.round(target.rot)));
+    }
+  });
   const up=e=>{ pts.delete(e.pointerId);
-    if(pts.size===1){ const [id]=[...pts.keys()]; const p=pts.get(id);
-      start={mode:"move",px:p.x,py:p.y,x:s.x,y:s.y}; }
-    if(pts.size===0) start=null; };
-  node.addEventListener("pointerup",up);
-  node.addEventListener("pointercancel",up);
+    if(pts.size===1 && target){ const [id]=[...pts.keys()]; const p=pts.get(id);
+      start={mode:"move",px:p.x,py:p.y,x:target.x,y:target.y}; }
+    if(pts.size===0){ start=null; target=null; } };
+  layerEl.addEventListener("pointerup",up);
+  layerEl.addEventListener("pointercancel",up);
 }
 
 let hintShown=false;
@@ -742,8 +831,10 @@ async function capture(){
   if(vr>br){ sh=video.videoHeight; sw=sh*br; sx=(video.videoWidth-sw)/2; sy=0; }
   else{ sw=video.videoWidth; sh=sw/br; sx=0; sy=(video.videoHeight-sh)/2; }
   ctx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
-  // 花を重ねる（選択枠は消す）
+  // 花を重ねる（選択枠は消す）。器の口線が有効なら線より下は描かない
   const wasSel=activeBloom; selectBloom(null);
+  ctx.save();
+  if(mouthY!=null){ ctx.beginPath(); ctx.rect(0,0,W,mouthY); ctx.clip(); }
   for(const s of placed){
     const img=s.node.querySelector("img");
     const {w:dispW,h:dispH}=dispDims(img);
@@ -755,6 +846,7 @@ async function capture(){
     ctx.drawImage(img,-ax,-ay,dispW,dispH);
     ctx.restore();
   }
+  ctx.restore();
   if(wasSel) selectBloom(wasSel);
   cv.toBlob(async blob=>{
     if(!blob){ toast("保存に失敗しました"); return; }
@@ -834,6 +926,7 @@ function initMaker(){
   $("#mkSizeSlider").addEventListener("input",e=>{
     if(makerBloom) setBloomScale(makerBloom, e.target.value);
   });
+  attachLayerGestures($("#makerLayer"), ()=>makerBloom?[makerBloom]:[], {select:false});
   $("#makeQRBtn").onclick=makeQRCard;
   $("#qClose").onclick=()=>$("#qrSheet").classList.remove("active");
   $("#qSave").onclick=saveQRCard;
@@ -841,7 +934,8 @@ function initMaker(){
 function buildPresetURL(){
   const s=Math.round(makerBloom.scale*100)/100;
   const base=LOC().origin + LOC().pathname;
-  return `${base}?work=${makerWork.id}&f=${makerBloom.flower.id}&s=${s}`;
+  // 生パラメータを見せない難読化トークン形式で発行する
+  return `${base}?d=${obEnc(`work=${makerWork.id}&f=${makerBloom.flower.id}&s=${s}`)}`;
 }
 function drawQRMatrix(ctx, m, px, offX, offY){
   ctx.fillStyle="#fff"; // 呼び出し側で背景済み想定でも念のため
@@ -924,11 +1018,52 @@ $("#delOneBtn").onclick=()=>{
   selectBloom(null);
   toast("花を1本消しました");
 };
-$("#layer").addEventListener("pointerdown",e=>{
-  if(e.target.id==="layer") selectBloom(null);
-});
 
-if(new URLSearchParams(LOC().search).get("mode")==="maker"){
+/* ── 器の口線（これより下の花は器の中として消える） ── */
+let mouthY=null;
+function applyMouthClip(){
+  const layer=$("#layer");
+  if(mouthY!=null){
+    layer.style.clipPath=`inset(0 0 ${Math.max(0,layer.clientHeight-mouthY)}px 0)`;
+    const ln=$("#mouthLine");
+    ln.classList.add("on"); ln.style.top=(mouthY-17)+"px";
+  }else{
+    layer.style.clipPath="";
+    $("#mouthLine").classList.remove("on");
+  }
+}
+$("#vesselBtn").onclick=()=>{
+  if(mouthY==null){
+    mouthY=Math.round($("#layer").clientHeight*0.55);
+    toast("破線＝器の口。上下にドラッグして合わせてください");
+  }else{
+    mouthY=null;
+    toast("器の口の設定を解除しました");
+  }
+  applyMouthClip();
+};
+(()=>{ // 口線のドラッグ
+  const ln=$("#mouthLine");
+  let dragging=false;
+  ln.addEventListener("pointerdown",e=>{
+    dragging=true;
+    try{ ln.setPointerCapture(e.pointerId); }catch(_){}
+    e.stopPropagation();
+  });
+  ln.addEventListener("pointermove",e=>{
+    if(!dragging||mouthY==null)return;
+    const r=$("#layer").getBoundingClientRect();
+    mouthY=Math.min(r.height-40, Math.max(60, e.clientY-r.top));
+    applyMouthClip();
+  });
+  const end=()=>dragging=false;
+  ln.addEventListener("pointerup",end);
+  ln.addEventListener("pointercancel",end);
+})();
+
+attachLayerGestures($("#layer"), ()=>placed, {mouthY:()=>mouthY});
+
+if(getParams().get("mode")==="maker"){
   initMaker();
 }else{
   loadWork();
