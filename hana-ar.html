@@ -61,20 +61,22 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   background:linear-gradient(0deg,rgba(0,0,0,.62) 60%,transparent);
   padding:12px 0 max(12px,env(safe-area-inset-bottom))}
 
-/* 左レール（季節・様式・花材の選択UI。画面中央を塞がない） */
-.side-rail{position:absolute;left:0;top:60px;bottom:170px;width:96px;z-index:5;
-  display:flex;flex-direction:column;gap:10px;padding:10px 8px;
-  background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
-#sideRail .tabs{flex-direction:column;padding:0;overflow:visible;gap:6px}
-#sideRail .tab{width:100%;padding:6px 0;font-size:13px;text-align:center;letter-spacing:.12em}
-#sideRail .tab-row{flex-direction:column;padding:0;overflow:visible;gap:5px}
-#sideRail .tab-row .tab{font-size:11px;padding:4px 0}
-#sideRail .thumbs{flex-direction:column;flex:1;padding:2px 0;overflow-y:auto;overflow-x:hidden;
+/* サイドレール（選択UIを左右端に振り分け、画面中央を塞がない）
+   左＝季節・様式タブ／右＝花材サムネイル（縦並び） */
+.side-rail{position:absolute;top:60px;bottom:170px;width:96px;z-index:5;
+  display:flex;flex-direction:column;gap:10px;padding:10px 8px}
+.rail-left{left:0;background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
+.rail-right{right:0;background:linear-gradient(270deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
+.side-rail .tabs{flex-direction:column;padding:0;overflow:visible;gap:6px}
+.side-rail .tab{width:100%;padding:6px 0;font-size:13px;text-align:center;letter-spacing:.12em}
+.side-rail .tab-row{flex-direction:column;padding:0;overflow:visible;gap:5px}
+.side-rail .tab-row .tab{font-size:11px;padding:4px 0}
+.side-rail .thumbs{flex-direction:column;flex:1;padding:2px 0;overflow-y:auto;overflow-x:hidden;
   align-items:center;gap:10px}
-#sideRail .thumb{width:68px}
-#sideRail .thumb .pic{width:68px;height:68px}
-#sideRail .thumb .nm{font-size:10px;margin-top:3px}
-#sideRail .empty-thumbs{font-size:11px;padding:12px 2px}
+.side-rail .thumb{width:68px}
+.side-rail .thumb .pic{width:68px;height:68px}
+.side-rail .thumb .nm{font-size:10px;margin-top:3px}
+.side-rail .empty-thumbs{font-size:11px;padding:12px 2px}
 .tabs{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:0 0 auto;padding:7px 16px;border-radius:100px;font-size:14px;
@@ -119,8 +121,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .size-row.mk input[type=range]::-webkit-slider-thumb{background:var(--seiji)}
 .size-row.mk input[type=range]::-moz-range-thumb{background:var(--seiji)}
 
-/* 操作ヒント（左レールを避けて右側領域の中央に出す） */
-.hint{position:absolute;top:64px;left:112px;right:12px;z-index:4;text-align:center;
+/* 操作ヒント（左右レールを避けて中央に出す） */
+.hint{position:absolute;top:64px;left:112px;right:112px;z-index:4;text-align:center;
   background:rgba(0,0,0,.5);color:#fff;font-size:12px;padding:7px 10px;border-radius:100px;
   opacity:0;transition:opacity .4s;pointer-events:none}
 .hint.show{opacity:1}
@@ -208,9 +210,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
   <div class="hint" id="hint">ドラッグで移動・下のスライダーで大きさと回転</div>
 
-  <div class="side-rail" id="sideRail">
+  <div class="side-rail rail-left" id="tabRail">
     <div class="tabs" id="seasonTabs"></div>
     <div class="tab-row" id="styleTabs"></div>
+  </div>
+  <div class="side-rail rail-right" id="flowerRail">
     <div class="thumbs" id="thumbs"></div>
   </div>
 
