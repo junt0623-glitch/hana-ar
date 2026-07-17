@@ -56,10 +56,25 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .icon-btn{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.14);
   color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 
-/* 下部パネル */
+/* 下部パネル（スライダー・シャッターのみの薄い帯） */
 .panel{position:absolute;left:0;right:0;bottom:0;z-index:5;
   background:linear-gradient(0deg,rgba(0,0,0,.62) 60%,transparent);
-  padding:16px 0 max(16px,env(safe-area-inset-bottom))}
+  padding:12px 0 max(12px,env(safe-area-inset-bottom))}
+
+/* 左レール（季節・様式・花材の選択UI。画面中央を塞がない） */
+.side-rail{position:absolute;left:0;top:60px;bottom:170px;width:96px;z-index:5;
+  display:flex;flex-direction:column;gap:10px;padding:10px 8px;
+  background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
+#sideRail .tabs{flex-direction:column;padding:0;overflow:visible;gap:6px}
+#sideRail .tab{width:100%;padding:6px 0;font-size:13px;text-align:center;letter-spacing:.12em}
+#sideRail .tab-row{flex-direction:column;padding:0;overflow:visible;gap:5px}
+#sideRail .tab-row .tab{font-size:11px;padding:4px 0}
+#sideRail .thumbs{flex-direction:column;flex:1;padding:2px 0;overflow-y:auto;overflow-x:hidden;
+  align-items:center;gap:10px}
+#sideRail .thumb{width:68px}
+#sideRail .thumb .pic{width:68px;height:68px}
+#sideRail .thumb .nm{font-size:10px;margin-top:3px}
+#sideRail .empty-thumbs{font-size:11px;padding:12px 2px}
 .tabs{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:0 0 auto;padding:7px 16px;border-radius:100px;font-size:14px;
@@ -84,9 +99,15 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   border:4px solid rgba(255,255,255,.5);box-shadow:0 0 0 2px rgba(0,0,0,.3)}
 .shutter:active{transform:scale(.94)}
 
-/* 大きさスライダー */
-.size-row{display:flex;align-items:center;gap:12px;padding:2px 20px 10px}
-.size-row .cap{color:#fff;font-size:12px;opacity:.85;flex:0 0 auto;letter-spacing:.05em}
+/* 大きさ・回転スライダー */
+.ctrl-bar{display:flex;align-items:center;gap:6px;padding:0 14px 4px}
+.ctrl-bar .sliders{flex:1;min-width:0}
+.bloom-del{flex:0 0 auto;width:46px;height:46px;border-radius:50%;font-size:19px;
+  background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;
+  opacity:.35;pointer-events:none;transition:opacity .2s}
+.bloom-del.on{opacity:1;pointer-events:auto;background:rgba(180,60,50,.85)}
+.size-row{display:flex;align-items:center;gap:10px;padding:2px 4px 8px}
+.size-row .cap{color:#fff;font-size:11px;opacity:.85;flex:0 0 44px;letter-spacing:.05em}
 .size-row input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;
   background:rgba(255,255,255,.3);outline:none;margin:0}
 .size-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
@@ -98,10 +119,10 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .size-row.mk input[type=range]::-webkit-slider-thumb{background:var(--seiji)}
 .size-row.mk input[type=range]::-moz-range-thumb{background:var(--seiji)}
 
-/* 操作ヒント */
-.hint{position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:4;
-  background:rgba(0,0,0,.5);color:#fff;font-size:12px;padding:7px 14px;border-radius:100px;
-  opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap}
+/* 操作ヒント（左レールを避けて右側領域の中央に出す） */
+.hint{position:absolute;top:64px;left:112px;right:12px;z-index:4;text-align:center;
+  background:rgba(0,0,0,.5);color:#fff;font-size:12px;padding:7px 10px;border-radius:100px;
+  opacity:0;transition:opacity .4s;pointer-events:none}
 .hint.show{opacity:1}
 
 /* モーダル（ネイティブダイアログ不使用） */
@@ -185,16 +206,27 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
     <button class="icon-btn" id="clearBtn" title="花を消す">🗑</button>
   </div>
 
-  <div class="hint" id="hint">ドラッグで移動・スライダーで大きさ・二本指で回転</div>
+  <div class="hint" id="hint">ドラッグで移動・下のスライダーで大きさと回転</div>
 
-  <div class="panel">
+  <div class="side-rail" id="sideRail">
     <div class="tabs" id="seasonTabs"></div>
     <div class="tab-row" id="styleTabs"></div>
     <div class="thumbs" id="thumbs"></div>
-    <div class="size-row" id="sizeRow">
-      <span class="cap">小</span>
-      <input type="range" id="sizeSlider" min="0" max="100" value="43" aria-label="花の大きさ">
-      <span class="cap">大</span>
+  </div>
+
+  <div class="panel">
+    <div class="ctrl-bar">
+      <div class="sliders">
+        <div class="size-row">
+          <span class="cap">大きさ</span>
+          <input type="range" id="sizeSlider" min="0" max="100" value="43" aria-label="花の大きさ">
+        </div>
+        <div class="size-row">
+          <span class="cap">回転</span>
+          <input type="range" id="rotSlider" min="-90" max="90" value="0" aria-label="花の回転">
+        </div>
+      </div>
+      <button class="bloom-del" id="delOneBtn" title="選んだ花を1本消す">✕</button>
     </div>
     <div class="shutter-wrap"><button class="shutter" id="shutter" title="保存"></button></div>
   </div>
@@ -451,8 +483,10 @@ function dispDims(img){
 }
 function setBloomScale(state, pct){ state.scale=pctToScale(+pct); applyTransform(state); }
 function syncSizeSlider(){
-  const sl=$("#sizeSlider"); if(!sl||!activeBloom) return;
-  sl.value=scaleToPct(activeBloom.scale);
+  if(!activeBloom) return;
+  const sl=$("#sizeSlider"), rs=$("#rotSlider");
+  if(sl) sl.value=scaleToPct(activeBloom.scale);
+  if(rs) rs.value=Math.max(-90,Math.min(90,Math.round(activeBloom.rot)));
 }
 
 /* ── モーダル（Promise化） ── */
@@ -559,7 +593,7 @@ function createBloom(f, layer){
   node.innerHTML=`<img src="${f.img}" alt="${f.name}">`;
   layer.appendChild(node);
   const lw=layer.clientWidth, lh=layer.clientHeight;
-  const state={node, x:lw/2, y:lh*0.62, scale:1, rot:0,
+  const state={node, x:lw/2, y:lh*0.62, scale:1, rot:0, flip:false,
                anchor:f.anchor||{x:.5,y:.96}, flower:f};
   node._state=state;
   attachGestures(state);
@@ -572,6 +606,18 @@ function createBloom(f, layer){
 }
 function placeFlower(f){
   const state=createBloom(f, $("#layer"));
+  // 同じ花材の2本目以降は、軸をわずかに回転・左右反転・少し小さく・位置をずらして
+  // 「全く同一の画像の複製」に見えないようにする
+  const n=placed.filter(p=>p.flower.id===f.id).length;
+  if(n>0){
+    const dir=(n%2)?-1:1;
+    state.rot=dir*(4+2*n);
+    state.flip=(n%2===1);
+    state.scale=Math.max(SMIN, 1-0.05*Math.min(n,3));
+    state.x+=dir*30*Math.ceil(n/2);
+    state.y-=8*Math.min(n,4);
+    applyTransform(state);
+  }
   placed.push(state);
   selectBloom(state);
   showHint();
@@ -600,8 +646,10 @@ function applyTransform(s){
   const {w:dispW,h:dispH}=dispDims(img);
   // アンカー点が (s.x,s.y) に来るよう左上を逆算
   const ax=s.anchor.x*dispW, ay=s.anchor.y*dispH;
+  // flip: アンカー点を通る鉛直軸で左右反転（同一花材の複数配置に変化をつける）
+  const sx=(s.flip?-1:1)*s.scale;
   s.node.style.transform=
-    `translate(${s.x-ax}px,${s.y-ay}px) rotate(${s.rot}deg) scale(${s.scale})`;
+    `translate(${s.x-ax}px,${s.y-ay}px) rotate(${s.rot}deg) scale(${sx},${s.scale})`;
   s.node.style.transformOrigin=`${ax}px ${ay}px`;
 }
 function selectBloom(s){
@@ -609,6 +657,7 @@ function selectBloom(s){
   if(s){ s.node.classList.add("selected");
     s.node.parentNode.appendChild(s.node); } // 前面へ
   activeBloom=s;
+  const del=$("#delOneBtn"); if(del) del.classList.toggle("on", !!s);
   syncSizeSlider();
 }
 
@@ -618,7 +667,7 @@ function attachGestures(s){
   const pts=new Map();
   let start=null;
   node.addEventListener("pointerdown",e=>{
-    node.setPointerCapture(e.pointerId);
+    try{ node.setPointerCapture(e.pointerId); }catch(_){/* 合成イベント等でactive pointerが無い場合 */}
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     selectBloom(s);
     if(pts.size===1){
@@ -644,6 +693,8 @@ function attachGestures(s){
       }else{
         s.rot=start.rot+(ang-start.ang)*180/Math.PI;
         applyTransform(s);
+        const rs=$("#rotSlider");
+        if(rs) rs.value=Math.max(-90,Math.min(90,Math.round(s.rot)));
       }
     }
   });
@@ -696,17 +747,30 @@ async function capture(){
     ctx.save();
     ctx.translate(s.x,s.y);
     ctx.rotate(s.rot*Math.PI/180);
-    ctx.scale(s.scale,s.scale);
+    ctx.scale((s.flip?-1:1)*s.scale,s.scale);
     ctx.drawImage(img,-ax,-ay,dispW,dispH);
     ctx.restore();
   }
   if(wasSel) selectBloom(wasSel);
-  cv.toBlob(blob=>{
+  cv.toBlob(async blob=>{
     if(!blob){ toast("保存に失敗しました"); return; }
+    const wid=currentWork?currentWork.id:"work";
+    const fname=`hana_${wid}_${Date.now()}.png`;
+    // iPhone等では共有シート経由で「画像を保存」→写真フォルダに入る
+    const file=new File([blob],fname,{type:"image/png"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({files:[file],title:"花をいける"});
+        toast("写真を保存・共有しました");
+        return;
+      }catch(err){
+        if(err && err.name==="AbortError") return; // 共有シートを閉じただけ
+        // それ以外の失敗は下のダウンロードへフォールバック
+      }
+    }
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
-    const wid=currentWork?currentWork.id:"work";
-    a.href=url; a.download=`hana_${wid}_${Date.now()}.png`;
+    a.href=url; a.download=fname;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     toast("画像を保存しました");
@@ -846,6 +910,16 @@ $("#shutter").onclick=capture;
 $("#sizeSlider").addEventListener("input",e=>{
   if(activeBloom) setBloomScale(activeBloom, e.target.value);
 });
+$("#rotSlider").addEventListener("input",e=>{
+  if(activeBloom){ activeBloom.rot=+e.target.value; applyTransform(activeBloom); }
+});
+$("#delOneBtn").onclick=()=>{
+  if(!activeBloom) return;
+  activeBloom.node.remove();
+  placed=placed.filter(p=>p!==activeBloom);
+  selectBloom(null);
+  toast("花を1本消しました");
+};
 $("#layer").addEventListener("pointerdown",e=>{
   if(e.target.id==="layer") selectBloom(null);
 });
