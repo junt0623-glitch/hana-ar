@@ -72,7 +72,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
 /* サイドレール（選択UIを左右端に振り分け、画面中央を塞がない）
    左＝季節・様式タブ／右＝花材サムネイル（縦並び） */
-.side-rail{position:absolute;top:60px;bottom:210px;width:96px;z-index:5;
+.side-rail{position:absolute;top:60px;bottom:240px;width:96px;z-index:5;
   display:flex;flex-direction:column;gap:10px;padding:10px 8px}
 .rail-left{left:0;background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
 .rail-right{right:0;background:linear-gradient(270deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 75%,transparent)}
@@ -117,17 +117,23 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;
   opacity:.35;pointer-events:none;transition:opacity .2s}
 .bloom-del.on{opacity:1;pointer-events:auto;background:rgba(180,60,50,.85)}
-.size-row{display:flex;align-items:center;gap:10px;padding:8px 4px}
-.sliders .size-row+.size-row{margin-top:12px} /* 2本のバーの間隔（誤タッチ防止） */
-.size-row .cap{color:#fff;font-size:11px;opacity:.85;flex:0 0 44px;letter-spacing:.05em}
-.size-row input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;
-  background:rgba(255,255,255,.3);outline:none;margin:0}
+.size-row{display:flex;align-items:center;gap:10px;padding:4px 4px}
+.sliders .size-row+.size-row{margin-top:22px} /* 大きさと回転の間隔（誤タッチ防止・回転を掴みやすく） */
+.size-row .cap{color:#fff;font-size:12px;opacity:.9;flex:0 0 44px;letter-spacing:.05em}
+/* トラックは細く見せつつ、入力要素の高さ(=縦のタッチ領域)を大きく確保して掴みやすくする */
+.size-row input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:38px;
+  background:transparent;outline:none;margin:0;cursor:pointer;touch-action:none}
+.size-row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;
+  background:rgba(255,255,255,.3)}
+.size-row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:rgba(255,255,255,.3)}
 .size-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
-  width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer}
-.size-row input[type=range]::-moz-range-thumb{width:28px;height:28px;border-radius:50%;
+  width:32px;height:32px;margin-top:-13px;border-radius:50%;background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer}
+.size-row input[type=range]::-moz-range-thumb{width:32px;height:32px;border-radius:50%;
   background:#fff;border:none;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer}
 .size-row.mk .cap{color:var(--sumi)}
-.size-row.mk input[type=range]{background:rgba(0,0,0,.15)}
+.size-row.mk input[type=range]::-webkit-slider-runnable-track{background:rgba(0,0,0,.15)}
+.size-row.mk input[type=range]::-moz-range-track{background:rgba(0,0,0,.15)}
 .size-row.mk input[type=range]::-webkit-slider-thumb{background:var(--seiji)}
 .size-row.mk input[type=range]::-moz-range-thumb{background:var(--seiji)}
 
