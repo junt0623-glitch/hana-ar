@@ -132,7 +132,7 @@ async function run() {
     await page.click('#seasonTabs .tab[data-season="winter"]');
     await page.waitForSelector("#thumbs .thumb");
     const names = await page.$$eval("#thumbs .thumb .nm", els => els.map(e => e.textContent.trim()).sort());
-    assert.deepStrictEqual(names, ["水仙", "梅", "蝋梅"].sort(), "got: " + JSON.stringify(names));
+    assert.deepStrictEqual(names, ["梅", "水仙", "蝋梅", "南天", "山茶"].sort(), "got: " + JSON.stringify(names));
   });
 
   await bt("bt05", "器適合: 真の様式(松竹梅)はW001に出ない", async (page) => {
@@ -255,16 +255,16 @@ async function run() {
     }
   });
 
-  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花9件)", async (page) => {
+  await bt("bt14", "メーカーモード初期表示(作品3件・W001適合花11件)", async (page) => {
     await page.goto(`${BASE}?mode=maker`);
     await page.waitForSelector("#maker.active");
     const opts = await page.$$eval("#workSelect option", els => els.length);
     assert.strictEqual(opts, 3);
     await page.waitForSelector("#makerThumbs .thumb");
     // メーカーは季節を跨いで適合花を全表示。
-    // W001: 梅・水仙・蝋梅・石榴花・桂花＋春4種(梅(残春)・海棠・蘭・桃)の9件
+    // W001(narrow, so/bunjin): 梅・水仙・蝋梅・南天・山茶・石榴花・桂花＋春4種(梅(残春)・海棠・蘭・桃)の11件
     const thumbs = await page.$$eval("#makerThumbs .thumb", els => els.length);
-    assert.strictEqual(thumbs, 9, "W001の適合花は9件のはず, got " + thumbs);
+    assert.strictEqual(thumbs, 11, "W001の適合花は11件のはず, got " + thumbs);
   });
 
   await bt("bt15", "メーカーモードでQRコードが生成される", async (page) => {
