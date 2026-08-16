@@ -55,6 +55,19 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .mouth-line .tag{position:absolute;top:0;left:50%;transform:translateX(-50%);
   background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:3px 10px;border-radius:100px;white-space:nowrap}
+/* 器の口マーカー（花の茎元をここに吸着させる） */
+.mouth-mark{position:absolute;left:0;top:0;width:46px;height:46px;z-index:4;display:none;
+  margin:-23px 0 0 -23px;touch-action:none;cursor:move}
+.mouth-mark.on{display:block}
+.mouth-mark .ring{position:absolute;inset:0;border-radius:50%;
+  border:2px solid rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.5),inset 0 0 6px rgba(0,0,0,.35)}
+.mouth-mark .ring::before,.mouth-mark .ring::after{content:"";position:absolute;background:rgba(255,255,255,.9)}
+.mouth-mark .ring::before{left:50%;top:7px;bottom:7px;width:2px;margin-left:-1px}
+.mouth-mark .ring::after{top:50%;left:7px;right:7px;height:2px;margin-top:-1px}
+.mouth-mark.snap .ring{border-color:#7ec8a0;
+  box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 12px rgba(126,200,160,.95)}
+.mouth-mark .tag{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:5px;
+  background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:3px 10px;border-radius:100px;white-space:nowrap}
 .bloom.selected{outline:1.5px dashed rgba(255,255,255,.7);outline-offset:6px}
 
 /* 上部バー */
@@ -222,12 +235,18 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   <div class="topbar">
     <div class="t-title" id="stageTitle"></div>
     <button class="icon-btn" id="vesselBtn" title="器の口の高さを設定">器</button>
+    <button class="icon-btn" id="mouthPtBtn" title="花の茎元を合わせる口の位置">⊕</button>
     <button class="icon-btn" id="clearBtn" title="花を消す">🗑</button>
   </div>
 
   <div class="mouth-line" id="mouthLine">
     <div class="bar"></div>
     <div class="tag">器の口 — 上下にドラッグ</div>
+  </div>
+
+  <div class="mouth-mark" id="mouthMark">
+    <div class="ring"></div>
+    <div class="tag">器の口 — ドラッグで合わせる</div>
   </div>
 
   <div class="hint" id="hint">ドラッグで移動・下のスライダーで大きさと回転</div>
@@ -660,6 +679,8 @@ function createBloom(f, layer){
 }
 function placeFlower(f){
   const state=createBloom(f, $("#layer"));
+  // 口マーカーが設定済みなら、茎元をその点に出現させる（実物の花器に自動で合う）
+  if(mouthPt){ state.x=mouthPt.x; state.y=mouthPt.y; }
   // 同じ花材の2本目以降は、軸をわずかに回転・左右反転・少し小さく・位置をずらして
   // 「全く同一の画像の複製」に見えないようにする
   const n=placed.filter(p=>p.flower.id===f.id).length;
@@ -668,10 +689,10 @@ function placeFlower(f){
     state.rot=dir*(4+2*n);
     state.flip=(n%2===1);
     state.scale=Math.max(SMIN, 1-0.05*Math.min(n,3));
-    state.x+=dir*30*Math.ceil(n/2);
-    state.y-=8*Math.min(n,4);
-    applyTransform(state);
+    // 口マーカー使用時は茎元を口に揃えたいので位置ずらしはせず、傾き・反転だけで変化をつける
+    if(!mouthPt){ state.x+=dir*30*Math.ceil(n/2); state.y-=8*Math.min(n,4); }
   }
+  applyTransform(state);
   placed.push(state);
   selectBloom(state);
   showHint();
@@ -788,6 +809,11 @@ function attachLayerGestures(layerEl, getBlooms, opts={}){
       target.x=start.x+(e.clientX-start.px);
       target.y=start.y+(e.clientY-start.py);
       applyTransform(target);
+      // 口マーカーに近づいたら吸着圏内であることを光らせて知らせる
+      if(opts.snapPt){ const sp=opts.snapPt();
+        const near=sp && Math.hypot(target.x-sp.x,target.y-sp.y)<=SNAP_R;
+        $("#mouthMark").classList.toggle("snap", !!near);
+      }
     }else if(pts.size===2 && start.mode==="rotate"){
       const [a,b]=[...pts.values()];
       const ang=Math.atan2(b.y-a.y,b.x-a.x);
@@ -800,7 +826,14 @@ function attachLayerGestures(layerEl, getBlooms, opts={}){
   const up=e=>{ pts.delete(e.pointerId);
     if(pts.size===1 && target){ const [id]=[...pts.keys()]; const p=pts.get(id);
       start={mode:"move",px:p.x,py:p.y,x:target.x,y:target.y}; }
-    if(pts.size===0){ start=null; target=null; } };
+    if(pts.size===0){
+      // 吸着圏内で指を離したら、茎元を口マーカーの位置へぴたりと合わせる
+      if(target && opts.snapPt){ const sp=opts.snapPt();
+        if(sp && Math.hypot(target.x-sp.x,target.y-sp.y)<=SNAP_R){
+          target.x=sp.x; target.y=sp.y; applyTransform(target); }
+        $("#mouthMark").classList.remove("snap");
+      }
+      start=null; target=null; } };
   layerEl.addEventListener("pointerup",up);
   layerEl.addEventListener("pointercancel",up);
 }
@@ -1067,7 +1100,39 @@ $("#vesselBtn").onclick=()=>{
   ln.addEventListener("pointercancel",end);
 })();
 
-attachLayerGestures($("#layer"), ()=>placed, {mouthY:()=>mouthY});
+/* ── 器の口マーカー（茎元スナップ・案1） ── */
+let mouthPt=null;              // 実物の花器の口の位置（レイヤー座標）。nullなら無効
+const SNAP_R=52;              // この距離(px)以内で指を離すと茎元を口へ吸着
+function applyMouthMark(){
+  const m=$("#mouthMark");
+  if(mouthPt){ m.classList.add("on"); m.style.left=mouthPt.x+"px"; m.style.top=mouthPt.y+"px"; }
+  else{ m.classList.remove("on","snap"); }
+}
+$("#mouthPtBtn").onclick=()=>{
+  if(mouthPt==null){
+    const layer=$("#layer");
+    mouthPt={x:Math.round(layer.clientWidth/2), y:Math.round(layer.clientHeight*0.62)};
+    toast("⊕を実物の花器の口へドラッグして合わせてください");
+  }else{ mouthPt=null; toast("口の位置を解除しました"); }
+  applyMouthMark();
+};
+(()=>{ // マーカーのドラッグ
+  const m=$("#mouthMark"); let dragging=false;
+  m.addEventListener("pointerdown",e=>{ dragging=true;
+    try{ m.setPointerCapture(e.pointerId); }catch(_){}
+    e.stopPropagation(); });
+  m.addEventListener("pointermove",e=>{
+    if(!dragging||mouthPt==null)return;
+    const r=$("#layer").getBoundingClientRect();
+    mouthPt={x:Math.min(r.width,Math.max(0,e.clientX-r.left)),
+             y:Math.min(r.height,Math.max(0,e.clientY-r.top))};
+    applyMouthMark(); });
+  const end=e=>{ dragging=false; };
+  m.addEventListener("pointerup",end);
+  m.addEventListener("pointercancel",end);
+})();
+
+attachLayerGestures($("#layer"), ()=>placed, {mouthY:()=>mouthY, snapPt:()=>mouthPt});
 
 if(getParams().get("mode")==="maker"){
   initMaker();

@@ -338,6 +338,52 @@ async function run() {
     assert(!clip2, "クリップが解除されていない: " + clip2);
   });
 
+  await bt("bt21", "口マーカー設定後に置いた花は茎元が口点に出現する", async (page) => {
+    await page.goto(`${BASE}?work=W001`);
+    await page.click("#startBtn");
+    await page.waitForSelector("#thumbs .thumb");
+    await page.click("#mouthPtBtn");
+    const mp = await page.$eval("#mouthMark", el => ({
+      x: parseFloat(el.style.left), y: parseFloat(el.style.top),
+      on: el.classList.contains("on") }));
+    assert(mp.on, "口マーカーが表示されていない");
+    await page.click("#thumbs .thumb");
+    await page.waitForSelector("#layer .bloom");
+    const st = await page.$eval("#layer .bloom", el => ({ x: el._state.x, y: el._state.y }));
+    assert.strictEqual(st.x, mp.x, `茎元xが口点に一致しない ${st.x} vs ${mp.x}`);
+    assert.strictEqual(st.y, mp.y, `茎元yが口点に一致しない ${st.y} vs ${mp.y}`);
+  });
+
+  await bt("bt22", "花の茎元が口マーカー付近で離すと吸着する", async (page) => {
+    await page.goto(`${BASE}?work=W001`);
+    await page.click("#startBtn");
+    await page.waitForSelector("#thumbs .thumb");
+    await page.click("#thumbs .thumb");            // 先に配置（マーカー無し＝既定位置）
+    await page.waitForSelector("#layer .bloom");
+    await page.click("#mouthPtBtn");               // 口マーカーを出す
+    // マーカーを花から離れた位置へドラッグして移動
+    const m0 = await page.$eval("#mouthMark", el => {
+      const r = el.getBoundingClientRect(); return { cx: r.x + r.width/2, cy: r.y + r.height/2 }; });
+    await page.mouse.move(m0.cx, m0.cy);
+    await page.mouse.down();
+    await page.mouse.move(120, 300, { steps: 6 });
+    await page.mouse.up();
+    const mp = await page.$eval("#mouthMark", el => ({ x: parseFloat(el.style.left), y: parseFloat(el.style.top) }));
+    // 花の茎元をつかみ、マーカーの吸着圏内(≤52px)へドラッグして離す
+    const b0 = await page.$eval("#layer .bloom", el => ({ x: el._state.x, y: el._state.y }));
+    const grab = await page.$eval("#layer .bloom", el => {
+      const r = el.getBoundingClientRect(); const a = el._state.anchor;
+      return { x: r.x + r.width * a.x, y: r.y + r.height * 0.9 }; });
+    const dx = (mp.x + 30) - b0.x, dy = (mp.y + 15) - b0.y;   // 圏内(≈33px)に寄せる
+    await page.mouse.move(grab.x, grab.y);
+    await page.mouse.down();
+    await page.mouse.move(grab.x + dx, grab.y + dy, { steps: 6 });
+    await page.mouse.up();
+    const st = await page.$eval("#layer .bloom", el => ({ x: el._state.x, y: el._state.y }));
+    assert.strictEqual(st.x, mp.x, `吸着後のx不一致 ${st.x} vs ${mp.x}`);
+    assert.strictEqual(st.y, mp.y, `吸着後のy不一致 ${st.y} vs ${mp.y}`);
+  });
+
   await browser.close();
   httpServer.close();
 
